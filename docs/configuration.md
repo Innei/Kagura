@@ -59,10 +59,19 @@ Example:
     "reasoningEffort": "medium",
     "sandbox": "danger-full-access"
   },
+  "piAgent": {
+    "command": "pi",
+    "args": ["-p", "--mode", "json"],
+    "model": ""
+  },
   "repoRootDir": "~/git",
   "worktreeRootDir": "~/git/kagura-worktrees"
 }
 ```
+
+`piAgent.command` and `piAgent.args` configure the Pi Agent adapter. The default is `pi -p --mode json` so Kagura can render Pi text, tool/plugin activity, usage, and generated artifacts in Slack. If Pi is installed through a shell profile or version manager, set `command` to the absolute executable path or export `PI_AGENT_COMMAND`.
+
+Provider model defaults come from `claude.model`, `codex.model`, and `piAgent.model` in `config.json`, or from `CLAUDE_MODEL`, `CODEX_MODEL`, and `PI_AGENT_MODEL` in the environment. In Slack, `/model list` shows models available to the current provider, plus the configured default and current thread override. Pi Agent uses `pi --list-models`, Codex uses `codex debug models`, and Claude Code falls back to supported aliases/common IDs because it does not expose a local model-catalog command. `/model <name>` sets a per-thread model override for the active provider (`claude-code`, `codex-cli`, or `pi-agent`) and clears the provider session handle so the next message starts with the selected model. `/model reset` clears the override and returns to the provider default.
 
 `agentTeams` maps Slack user group IDs (`<!subteam^S...>`) to bot user IDs. `members` can be a list of bot user ID strings or objects with `id`, optional `label`, and optional `role`. Labels and roles are shown in the A2A prompt roster so agents know which peer to mention for implementation, review, or other delegated work. When a message mentions a configured team, only `defaultLead` starts an Agent run; other configured members stay idle until the lead or user explicitly mentions them later in the thread.
 

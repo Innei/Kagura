@@ -15,10 +15,15 @@ export interface AppConfigJson {
     reasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
     sandbox?: 'read-only' | 'workspace-write' | 'danger-full-access';
   };
-  defaultProviderId?: 'claude-code' | 'codex-cli';
+  defaultProviderId?: 'claude-code' | 'codex-cli' | 'pi-agent';
   logDir?: string;
   logLevel?: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
   logToFile?: boolean;
+  piAgent?: {
+    args?: string[];
+    command?: string;
+    model?: string;
+  };
   repoRootDir?: string;
   repoScanDepth?: number;
   sessionDbPath?: string;

@@ -255,11 +255,13 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
     );
     const { systemPrompt, userPrompt } = createClaudePromptInput(request);
 
+    const modelOverride = request.modelOverride ?? env.CLAUDE_MODEL;
+
     this.logger.info(
       'Creating Claude SDK query (execution=%s thread=%s model=%s permissionMode=%s resume=%s cwd=%s)',
       probeExecutionId,
       request.threadTs,
-      env.CLAUDE_MODEL ?? 'default',
+      modelOverride ?? 'default',
       this.permissionMode,
       request.resumeHandle ?? 'none',
       request.workspacePath ?? '(none)',
@@ -271,7 +273,7 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
       session = query({
         prompt: userPrompt,
         options: {
-          ...(env.CLAUDE_MODEL ? { model: env.CLAUDE_MODEL } : {}),
+          ...(modelOverride ? { model: modelOverride } : {}),
           agentProgressSummaries: true,
           includeHookEvents: true,
           includePartialMessages: true,

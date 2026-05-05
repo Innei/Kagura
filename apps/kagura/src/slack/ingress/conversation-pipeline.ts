@@ -460,6 +460,9 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
         userId: message.user,
         mentionText: message.text,
         threadContext,
+        ...(ctx.existingSession?.agentModel
+          ? { modelOverride: ctx.existingSession.agentModel }
+          : {}),
         ...(contextMemories ? { contextMemories } : {}),
         ...(workspace
           ? {

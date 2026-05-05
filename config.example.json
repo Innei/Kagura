@@ -35,6 +35,11 @@
   "logDir": "./logs",
   "logLevel": "info",
   "logToFile": false,
+  "piAgent": {
+    "command": "pi",
+    "args": ["-p", "--mode", "json"],
+    "model": ""
+  },
   "repoRootDir": "~/git",
   "repoScanDepth": 2,
   "reviewPanel": {

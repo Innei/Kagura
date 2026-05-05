@@ -423,7 +423,8 @@ export class CodexCliExecutor implements AgentExecutor {
   }
 
   private buildArgs(request: AgentExecutionRequest): string[] {
-    const modelArgs = env.CODEX_MODEL ? ['--model', env.CODEX_MODEL] : [];
+    const model = request.modelOverride ?? env.CODEX_MODEL;
+    const modelArgs = model ? ['--model', model] : [];
     const reasoningArgs = env.CODEX_REASONING_EFFORT
       ? ['-c', `model_reasoning_effort="${env.CODEX_REASONING_EFFORT}"`]
       : [];
@@ -583,7 +584,7 @@ export class CodexCliExecutor implements AgentExecutor {
       case 'turn.completed': {
         await sink.onEvent({
           type: 'usage-info',
-          usage: this.toUsageInfo(event, handlers.getDurationMs()),
+          usage: this.toUsageInfo(event, handlers.getDurationMs(), handlers.request),
         });
         await sink.onEvent({
           type: 'activity-state',
@@ -677,7 +678,11 @@ export class CodexCliExecutor implements AgentExecutor {
     }
   }
 
-  private toUsageInfo(event: CodexJsonEvent, durationMs: number): SessionUsageInfo {
+  private toUsageInfo(
+    event: CodexJsonEvent,
+    durationMs: number,
+    request: AgentExecutionRequest,
+  ): SessionUsageInfo {
     const inputTokens =
       typeof event.usage?.input_tokens === 'number' ? event.usage.input_tokens : 0;
     const cacheReadInputTokens =
@@ -697,7 +702,7 @@ export class CodexCliExecutor implements AgentExecutor {
           costUSD: 0,
           inputTokensIncludeCache: true,
           inputTokens,
-          model: env.CODEX_MODEL ?? 'codex-cli',
+          model: request.modelOverride ?? env.CODEX_MODEL ?? 'codex-cli',
           outputTokens,
         },
       ],

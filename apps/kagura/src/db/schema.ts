@@ -9,6 +9,7 @@ export const sessions = sqliteTable('sessions', {
   // Physical column name is kept for backward compatibility with existing SQLite files.
   providerSessionId: text('claude_session_id'),
   agentProvider: text('agent_provider'),
+  agentModel: text('agent_model'),
   conversationMode: text('conversation_mode', { enum: ['general', 'a2a'] }),
   a2aLead: text('a2a_lead'),
   a2aTeamId: text('a2a_team_id'),

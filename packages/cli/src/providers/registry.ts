@@ -1,10 +1,12 @@
 import { claudeProvider } from './claude.js';
 import { codexProvider } from './codex.js';
+import { piAgentProvider } from './pi-agent.js';
 import type { ProviderId, ProviderSetup } from './types.js';
 
 const byId: Record<ProviderId, ProviderSetup> = {
   'claude-code': claudeProvider,
   'codex-cli': codexProvider,
+  'pi-agent': piAgentProvider,
 };
 
 export function listProviders(): ProviderSetup[] {

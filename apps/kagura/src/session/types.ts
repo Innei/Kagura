@@ -4,6 +4,7 @@ export interface SessionRecord {
   a2aPendingAssignments?: string | undefined;
   a2aSummaryState?: string | undefined;
   a2aTeamId?: string | undefined;
+  agentModel?: string | undefined;
   agentProvider?: string | undefined;
   bootstrapMessageTs?: string | undefined;
   channelId: string;

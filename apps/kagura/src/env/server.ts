@@ -61,7 +61,15 @@ const appConfigSchema = z
         sandbox: z.enum(['read-only', 'workspace-write', 'danger-full-access']).optional(),
       })
       .optional(),
-    defaultProviderId: z.enum(['claude-code', 'codex-cli']).optional(),
+    piAgent: z
+      .object({
+        args: z.array(z.string()).optional(),
+        command: z.string().optional(),
+        model: z.string().optional(),
+      })
+      .strict()
+      .optional(),
+    defaultProviderId: z.enum(['claude-code', 'codex-cli', 'pi-agent']).optional(),
     logDir: z.string().optional(),
     logLevel: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).optional(),
     logToFile: z.boolean().optional(),
@@ -133,6 +141,10 @@ function configNumber(value: number | undefined): string | undefined {
   return value === undefined ? undefined : String(value);
 }
 
+function configStringArray(value: string[] | undefined): string | undefined {
+  return value === undefined ? undefined : JSON.stringify(value);
+}
+
 function envOrConfig(envName: string, configValue: string | undefined): string | undefined {
   const raw = process.env[envName];
   if (raw === undefined) {
@@ -168,7 +180,7 @@ function resolveDefaultReviewPanelAssetsDir(): string {
 export const env = createEnv({
   server: {
     APP_CONFIG_PATH: z.string().min(1).optional(),
-    AGENT_DEFAULT_PROVIDER: z.enum(['claude-code', 'codex-cli']).default('claude-code'),
+    AGENT_DEFAULT_PROVIDER: z.enum(['claude-code', 'codex-cli', 'pi-agent']).default('claude-code'),
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: z.coerce.number().int().positive().default(3000),
     SLACK_BOT_TOKEN: z.string().min(1),
@@ -193,6 +205,9 @@ export const env = createEnv({
     CODEX_CLI_SANDBOX: z
       .enum(['read-only', 'workspace-write', 'danger-full-access'])
       .default('danger-full-access'),
+    PI_AGENT_COMMAND: z.string().min(1).default('pi'),
+    PI_AGENT_ARGS: z.string().min(1).default('["-p","--mode","json"]'),
+    PI_AGENT_MODEL: z.string().min(1).optional(),
     LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
     LOG_TO_FILE: booleanStringSchema.default(false),
     LOG_DIR: z.string().min(1).default('./logs'),
@@ -260,6 +275,9 @@ export const env = createEnv({
     CODEX_MODEL: envOrConfig('CODEX_MODEL', configString(appConfig.codex?.model)),
     CODEX_REASONING_EFFORT: envOrConfig('CODEX_REASONING_EFFORT', appConfig.codex?.reasoningEffort),
     CODEX_CLI_SANDBOX: envOrConfig('CODEX_CLI_SANDBOX', appConfig.codex?.sandbox),
+    PI_AGENT_COMMAND: envOrConfig('PI_AGENT_COMMAND', configString(appConfig.piAgent?.command)),
+    PI_AGENT_ARGS: envOrConfig('PI_AGENT_ARGS', configStringArray(appConfig.piAgent?.args)),
+    PI_AGENT_MODEL: envOrConfig('PI_AGENT_MODEL', configString(appConfig.piAgent?.model)),
     LOG_LEVEL: envOrConfig('LOG_LEVEL', appConfig.logLevel),
     LOG_TO_FILE: envOrConfig('LOG_TO_FILE', configBoolean(appConfig.logToFile)),
     LOG_DIR: envOrConfig('LOG_DIR', configString(appConfig.logDir)),
