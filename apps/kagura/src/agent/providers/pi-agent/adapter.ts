@@ -102,6 +102,7 @@ interface PiStreamState {
   lastAssistantText: string | undefined;
   lastUsage: PiUsage | undefined;
   model: string | undefined;
+  requestedModel: string | undefined;
 }
 
 function createAbortError(): Error {
@@ -193,6 +194,7 @@ export class PiAgentExecutor implements AgentExecutor {
       lastAssistantText: undefined,
       lastUsage: undefined,
       model: undefined,
+      requestedModel: request.modelOverride ?? env.PI_AGENT_MODEL,
     };
     const stderrLines: string[] = [];
     let child: ChildProcessWithoutNullStreams | undefined;
@@ -214,7 +216,10 @@ export class PiAgentExecutor implements AgentExecutor {
       const generatedArtifactsBefore = await snapshotGeneratedArtifacts(
         runtimePaths.generatedArtifactsDir,
       );
-      const args = parsePiAgentArgs(env.PI_AGENT_ARGS);
+      const args = withPiModelArg(
+        parsePiAgentArgs(env.PI_AGENT_ARGS),
+        request.modelOverride ?? env.PI_AGENT_MODEL,
+      );
       child = spawn(env.PI_AGENT_COMMAND, args, {
         cwd,
         env: {
@@ -605,7 +610,7 @@ export class PiAgentExecutor implements AgentExecutor {
           costUSD,
           inputTokens,
           inputTokensIncludeCache: true,
-          model: state.model ?? env.PI_AGENT_MODEL ?? 'pi-agent',
+          model: state.model ?? state.requestedModel ?? env.PI_AGENT_MODEL ?? 'pi-agent',
           outputTokens,
         },
       ],
@@ -632,6 +637,30 @@ function ensurePiJsonMode(args: string[]): string[] {
   }
   const hasInlineMode = args.some((arg) => arg.startsWith('--mode='));
   return hasInlineMode ? args : [...args, '--mode', 'json'];
+}
+
+function withPiModelArg(args: string[], model: string | undefined): string[] {
+  const trimmed = model?.trim();
+  if (!trimmed) {
+    return args;
+  }
+
+  const next: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (!arg) {
+      continue;
+    }
+    if (arg === '--model') {
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--model=')) {
+      continue;
+    }
+    next.push(arg);
+  }
+  return [...next, '--model', trimmed];
 }
 
 function formatErrorWithDetails(message: string, stderrLines: string[]): string {

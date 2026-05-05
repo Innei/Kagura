@@ -34,6 +34,7 @@ export class SqliteSessionStore implements SessionStore {
         streamMessageTs: record.streamMessageTs ?? null,
         providerSessionId: record.providerSessionId ?? null,
         agentProvider: record.agentProvider ?? null,
+        agentModel: record.agentModel ?? null,
         conversationMode: record.conversationMode ?? null,
         a2aLead: record.a2aLead ?? null,
         a2aTeamId: record.a2aTeamId ?? null,
@@ -58,6 +59,7 @@ export class SqliteSessionStore implements SessionStore {
           streamMessageTs: record.streamMessageTs ?? null,
           providerSessionId: record.providerSessionId ?? null,
           agentProvider: record.agentProvider ?? null,
+          agentModel: record.agentModel ?? null,
           conversationMode: record.conversationMode ?? null,
           a2aLead: record.a2aLead ?? null,
           a2aTeamId: record.a2aTeamId ?? null,
@@ -102,6 +104,7 @@ export class SqliteSessionStore implements SessionStore {
         streamMessageTs: next.streamMessageTs ?? null,
         providerSessionId: next.providerSessionId ?? null,
         agentProvider: next.agentProvider ?? null,
+        agentModel: next.agentModel ?? null,
         conversationMode: next.conversationMode ?? null,
         a2aLead: next.a2aLead ?? null,
         a2aTeamId: next.a2aTeamId ?? null,
@@ -149,6 +152,7 @@ export class SqliteSessionStore implements SessionStore {
     if (row.workspaceLabel !== null) record.workspaceLabel = row.workspaceLabel;
     if (row.workspaceSource !== null) record.workspaceSource = row.workspaceSource;
     if (row.agentProvider !== null) record.agentProvider = row.agentProvider;
+    if (row.agentModel !== null) record.agentModel = row.agentModel;
     if (row.lastTurnTriggerTs !== null) record.lastTurnTriggerTs = row.lastTurnTriggerTs;
     return record;
   }

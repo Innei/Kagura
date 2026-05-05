@@ -33,6 +33,7 @@ export interface AgentExecutionRequest {
   currentTriggerTs?: string;
   executionId?: string;
   mentionText: string;
+  modelOverride?: string;
   previousTurnTriggerTs?: string;
   resumeHandle?: string;
   threadContext: NormalizedThreadContext;

@@ -8,6 +8,7 @@ import type { AppLogger } from '~/logger/index.js';
 import type { MemoryRecord, MemoryStore } from '~/memory/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
 import { handleMemoryCommand } from '~/slack/commands/memory-command.js';
+import { handleModelCommand } from '~/slack/commands/model-command.js';
 import { handleSessionCommand } from '~/slack/commands/session-command.js';
 import type { SlashCommandDependencies } from '~/slack/commands/types.js';
 import { handleUsageCommand } from '~/slack/commands/usage-command.js';
@@ -180,8 +181,8 @@ function createTestDeps(options?: {
     memoryStore: createMemoryStore(options?.memoryRecords ?? []),
     providerRegistry: {
       defaultProviderId: 'claude-code',
-      providerIds: ['claude-code'],
-      has: (id: string) => id === 'claude-code',
+      providerIds: ['claude-code', 'codex-cli', 'pi-agent'],
+      has: (id: string) => ['claude-code', 'codex-cli', 'pi-agent'].includes(id),
       getExecutor: () => {
         throw new Error('not used in tests');
       },
@@ -300,6 +301,61 @@ describe('handleWorkspaceCommand', () => {
     const deps = createTestDeps({ repoRoot });
     const result = handleWorkspaceCommand('', deps);
     expect(result.text).toContain('No repositories found');
+  });
+});
+
+describe('handleModelCommand', () => {
+  it('lists provider model defaults and current thread override', () => {
+    const deps = createTestDeps({
+      sessionRecords: [
+        makeSession('ts-model', {
+          agentModel: 'zai/glm-5.1',
+          agentProvider: 'pi-agent',
+        }),
+      ],
+    });
+
+    const result = handleModelCommand('list', { ...deps, threadTs: 'ts-model' });
+
+    expect(result.response_type).toBe('ephemeral');
+    expect(result.text).toContain('Configured Model Defaults');
+    expect(result.text).toContain('`pi-agent`');
+    expect(result.text).toContain('`zai/glm-5.1`');
+  });
+
+  it('sets a thread model override and resets provider session id', () => {
+    const deps = createTestDeps({
+      sessionRecords: [
+        makeSession('ts-model', {
+          providerSessionId: 'provider-session-1',
+        }),
+      ],
+    });
+
+    const result = handleModelCommand('gpt-5.5', { ...deps, threadTs: 'ts-model' });
+
+    expect(result.text).toContain('Model switched to *gpt-5.5*');
+    expect(deps.sessionStore.get('ts-model')).toMatchObject({
+      agentModel: 'gpt-5.5',
+    });
+    expect(deps.sessionStore.get('ts-model')?.providerSessionId).toBeUndefined();
+  });
+
+  it('resets a thread model override', () => {
+    const deps = createTestDeps({
+      sessionRecords: [
+        makeSession('ts-model', {
+          agentModel: 'claude-sonnet-4',
+          providerSessionId: 'provider-session-1',
+        }),
+      ],
+    });
+
+    const result = handleModelCommand('reset', { ...deps, threadTs: 'ts-model' });
+
+    expect(result.text).toContain('Model override cleared');
+    expect(deps.sessionStore.get('ts-model')?.agentModel).toBeUndefined();
+    expect(deps.sessionStore.get('ts-model')?.providerSessionId).toBeUndefined();
   });
 });
 

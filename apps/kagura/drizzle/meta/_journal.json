@@ -35,6 +35,13 @@
       "when": 1777899000000,
       "tag": "0004_memory_ingestion_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1777961000000,
+      "tag": "0005_agent_model",
+      "breakpoints": true
     }
   ],
   "version": "7"

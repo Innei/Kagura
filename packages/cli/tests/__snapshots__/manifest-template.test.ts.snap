@@ -50,6 +50,11 @@ exports[`manifest-template > produces expected manifest structure 1`] = `
         "usage_hint": "[list|reset|<provider-id>]",
       },
       {
+        "command": "/model",
+        "description": "View or switch the AI model for this thread",
+        "usage_hint": "[list|reset|<model-name>]",
+      },
+      {
         "command": "/version",
         "description": "Show the current bot deployment version (git commit hash)",
         "usage_hint": " ",

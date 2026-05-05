@@ -15,7 +15,7 @@ describe('manifest-template', () => {
 
   it('exports desired command / shortcut / event sets', () => {
     expect(DESIRED_COMMANDS.map((c) => c.command).sort()).toEqual(
-      ['/usage', '/workspace', '/memory', '/session', '/version', '/provider'].sort(),
+      ['/usage', '/workspace', '/memory', '/session', '/version', '/provider', '/model'].sort(),
     );
     expect(DESIRED_SHORTCUTS.map((s) => s.callback_id)).toContain('stop_reply_action');
     expect([...DESIRED_BOT_EVENTS].sort()).toEqual(

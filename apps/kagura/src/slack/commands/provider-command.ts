@@ -86,6 +86,7 @@ function resetProvider(deps: ProviderCommandDependencies): SlashCommandResponse 
 
   sessionStore.patch(threadTs, {
     agentProvider: undefined,
+    agentModel: undefined,
     providerSessionId: undefined,
   });
 
@@ -123,11 +124,12 @@ function setProvider(providerId: string, deps: ProviderCommandDependencies): Sla
 
   sessionStore.patch(threadTs, {
     agentProvider: providerId,
+    agentModel: undefined,
     providerSessionId: undefined,
   });
 
   return {
     response_type: 'ephemeral',
-    text: `Provider switched to *${providerId}* for this thread. The next message will use the new provider.`,
+    text: `Provider switched to *${providerId}* for this thread. The next message will use the new provider and its default model.`,
   };
 }

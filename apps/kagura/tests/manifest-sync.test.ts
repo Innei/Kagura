@@ -134,6 +134,7 @@ describe('syncSlashCommands with token rotation', () => {
               { command: '/memory', description: 'test' },
               { command: '/session', description: 'test' },
               { command: '/provider', description: 'test' },
+              { command: '/model', description: 'test' },
               { command: '/version', description: 'test' },
             ],
             shortcuts: [
@@ -203,6 +204,7 @@ describe('syncSlashCommands with token rotation', () => {
                 { command: '/memory', description: 'test' },
                 { command: '/session', description: 'test' },
                 { command: '/provider', description: 'test' },
+                { command: '/model', description: 'test' },
                 { command: '/version', description: 'test' },
               ],
               shortcuts: [
@@ -281,6 +283,7 @@ describe('syncSlashCommands with token rotation', () => {
                 { command: '/memory', description: 'test' },
                 { command: '/session', description: 'test' },
                 { command: '/provider', description: 'test' },
+                { command: '/model', description: 'test' },
               ],
               shortcuts: [
                 {
@@ -344,7 +347,7 @@ describe('syncSlashCommands with token rotation', () => {
 
     const body = JSON.parse(updateInit.body as string);
     const commands = body.manifest.features.slash_commands;
-    expect(commands).toHaveLength(6);
+    expect(commands).toHaveLength(7);
     expect(commands.map((c: { command: string }) => c.command)).toEqual(
       expect.arrayContaining([
         '/usage',
@@ -352,6 +355,7 @@ describe('syncSlashCommands with token rotation', () => {
         '/memory',
         '/session',
         '/provider',
+        '/model',
         '/version',
       ]),
     );
@@ -377,6 +381,7 @@ describe('syncSlashCommands with token rotation', () => {
               { command: '/memory', description: 'x' },
               { command: '/session', description: 'x' },
               { command: '/provider', description: 'x' },
+              { command: '/model', description: 'x' },
               { command: '/version', description: 'x' },
             ],
             shortcuts: [
@@ -425,6 +430,7 @@ describe('syncSlashCommands with token rotation', () => {
                 { command: '/memory', description: 'x' },
                 { command: '/session', description: 'x' },
                 { command: '/provider', description: 'x' },
+                { command: '/model', description: 'x' },
                 { command: '/version', description: 'x' },
               ],
               shortcuts: [
@@ -490,6 +496,7 @@ describe('syncSlashCommands with token rotation', () => {
                 { command: '/memory', description: 'x' },
                 { command: '/session', description: 'x' },
                 { command: '/provider', description: 'x' },
+                { command: '/model', description: 'x' },
                 { command: '/version', description: 'x' },
               ],
               shortcuts: [
