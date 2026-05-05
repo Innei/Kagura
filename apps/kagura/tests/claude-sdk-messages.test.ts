@@ -1,7 +1,11 @@
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import type {
   SDKAPIRetryMessage,
+  SDKAssistantMessage,
   SDKFilesPersistedEvent,
   SDKSystemMessage,
 } from '@anthropic-ai/claude-agent-sdk';
@@ -45,6 +49,52 @@ function minimalInitMessage(cwd: string): SDKSystemMessage {
     plugins: [],
     uuid: '00000000-0000-4000-8000-000000000000',
   };
+}
+
+function createGitWorktreeFixture(): { repoPath: string; worktreePath: string } {
+  const repoPath = mkdtempSync(path.join(tmpdir(), 'claude-worktree-source-'));
+  const worktreePath = mkdtempSync(path.join(tmpdir(), 'claude-worktree-target-'));
+  rmSync(worktreePath, { force: true, recursive: true });
+  execFileSync('git', ['init', '-b', 'main'], { cwd: repoPath, stdio: 'ignore' });
+  execFileSync('git', ['config', 'user.email', 'test@example.com'], {
+    cwd: repoPath,
+    stdio: 'ignore',
+  });
+  execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: repoPath, stdio: 'ignore' });
+  writeFileSync(path.join(repoPath, 'README.md'), 'fixture\n');
+  execFileSync('git', ['add', '.'], { cwd: repoPath, stdio: 'ignore' });
+  execFileSync('git', ['-c', 'commit.gpgsign=false', 'commit', '-m', 'initial'], {
+    cwd: repoPath,
+    stdio: 'ignore',
+  });
+  execFileSync('git', ['remote', 'add', 'origin', 'git@example.com:Innei/kagura.git'], {
+    cwd: repoPath,
+    stdio: 'ignore',
+  });
+  execFileSync('git', ['worktree', 'add', '-b', 'feature/claude-worktree', worktreePath], {
+    cwd: repoPath,
+    stdio: 'ignore',
+  });
+  return { repoPath, worktreePath };
+}
+
+function minimalAssistantMessage(text: string): SDKAssistantMessage {
+  return {
+    type: 'assistant',
+    message: {
+      id: 'msg-test',
+      type: 'message',
+      role: 'assistant',
+      model: 'test-model',
+      content: [{ type: 'text', text }],
+      stop_reason: 'end_turn',
+      stop_sequence: null,
+      usage: { input_tokens: 1, output_tokens: 1 },
+    },
+    parent_tool_use_id: null,
+    uuid: '00000000-0000-4000-8000-000000000010',
+    session_id: 'sess-test',
+  } as unknown as SDKAssistantMessage;
 }
 
 describe('handleClaudeSdkMessage — files_persisted', () => {
@@ -176,6 +226,89 @@ describe('handleClaudeSdkMessage — files_persisted', () => {
     expect(imgEvents[0]!.files[0]!.path).toBe(path.resolve(fallback, 'img.JPEG'));
 
     spy.mockRestore();
+  });
+});
+
+describe('handleClaudeSdkMessage — workspace context', () => {
+  let sessionCwd: string | undefined;
+  let events: AgentExecutionEvent[];
+  let sink: AgentExecutionSink;
+
+  beforeEach(() => {
+    sessionCwd = undefined;
+    events = [];
+    sink = {
+      onEvent: async (event) => {
+        events.push(event);
+      },
+    };
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function createHandlers(workspacePath: string): MessageHandlers {
+    return {
+      publishUiState: vi.fn().mockResolvedValue(undefined),
+      runtimeUi: createRuntimeUiStateTracker(),
+      setSessionId: vi.fn(),
+      getSessionCwd: () => sessionCwd,
+      setSessionCwd: (cwd: string) => {
+        sessionCwd = cwd;
+      },
+      workspaceContext: {
+        workspaceLabel: 'slack-cc-bot',
+        workspacePath,
+        workspaceRepoId: 'innei-repo/slack-cc-bot',
+      },
+    };
+  }
+
+  it('emits workspace-context when Claude SDK init reports a worktree cwd', async () => {
+    const { repoPath, worktreePath } = createGitWorktreeFixture();
+    const handlers = createHandlers(repoPath);
+
+    await handleClaudeSdkMessage(
+      createTestLogger(),
+      minimalInitMessage(worktreePath),
+      sink,
+      handlers,
+    );
+
+    const resolvedWorktreePath = execFileSync(
+      'git',
+      ['-C', worktreePath, 'rev-parse', '--show-toplevel'],
+      { encoding: 'utf8' },
+    ).trim();
+    expect(events).toContainEqual({
+      type: 'workspace-context',
+      workspaceLabel: path.basename(worktreePath),
+      workspacePath: resolvedWorktreePath,
+      workspaceRepoId: 'innei-repo/slack-cc-bot',
+    });
+  });
+
+  it('emits workspace-context before final assistant text when Claude mentions a worktree path', async () => {
+    const { repoPath, worktreePath } = createGitWorktreeFixture();
+    const handlers = createHandlers(repoPath);
+
+    await handleClaudeSdkMessage(
+      createTestLogger(),
+      minimalAssistantMessage(`Implemented in ${worktreePath}`),
+      sink,
+      handlers,
+    );
+
+    expect(events[0]).toMatchObject({
+      type: 'workspace-context',
+      workspaceLabel: path.basename(worktreePath),
+      workspaceRepoId: 'innei-repo/slack-cc-bot',
+    });
+    expect(events[1]).toEqual({
+      type: 'assistant-message',
+      text: `Implemented in ${worktreePath}`,
+    });
   });
 });
 

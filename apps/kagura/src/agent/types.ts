@@ -128,6 +128,12 @@ export type AgentExecutionEvent =
       text: string;
     }
   | {
+      type: 'workspace-context';
+      workspaceLabel?: string | undefined;
+      workspacePath: string;
+      workspaceRepoId?: string | undefined;
+    }
+  | {
       type: 'activity-state';
       state: AgentActivityState;
     }

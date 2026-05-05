@@ -927,6 +927,66 @@ describe('createActivitySink', () => {
     metadataSpy.mockRestore();
   });
 
+  it('switches the Slack workspace context when provider reports a worktree path', async () => {
+    const metadataSpy = vi
+      .spyOn(workspaceResolverModule, 'resolveWorkspaceDisplayMetadata')
+      .mockReturnValue({
+        workspaceBranch: 'feature/worktree',
+        workspacePullRequestNumber: 789,
+        workspacePullRequestUrl: 'https://github.com/Innei/kagura/pull/789',
+      });
+
+    const renderer = createRendererStub();
+    vi.mocked(renderer.postThreadReply).mockResolvedValue({
+      blocks: [
+        {
+          type: 'context',
+          elements: [{ type: 'mrkdwn', text: '_Working in repo (branch: main)_' }],
+        },
+      ] as never,
+      text: 'First message',
+      ts: 'reply-ts',
+    });
+    const sessionStore = createMockSessionStore();
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore,
+      threadTs: 'ts1',
+      workspaceBranch: 'main',
+      workspaceLabel: 'repo',
+      workspacePath: '/repo/source',
+    });
+
+    await sink.onEvent({ type: 'assistant-message', text: 'First message' });
+    await sink.onEvent({
+      type: 'workspace-context',
+      workspaceLabel: 'repo-worktree',
+      workspacePath: '/repo/worktree',
+      workspaceRepoId: 'repo-id',
+    });
+
+    expect(sessionStore.patch).toHaveBeenCalledWith('ts1', {
+      workspaceLabel: 'repo-worktree',
+      workspacePath: '/repo/worktree',
+      workspaceRepoId: 'repo-id',
+    });
+    expect(renderer.updateThreadReplyWorkspaceContext).toHaveBeenCalledWith(
+      expect.anything(),
+      'C123',
+      'ts1',
+      expect.objectContaining({ ts: 'reply-ts' }),
+      {
+        workspaceBranch: 'feature/worktree',
+        workspaceLabel: 'repo-worktree',
+      },
+    );
+
+    metadataSpy.mockRestore();
+  });
+
   it('forwards permission requests to the Slack permission bridge', async () => {
     const client = createMockClient();
     const permissionBridge = {
@@ -1052,6 +1112,73 @@ describe('createActivitySink', () => {
       {},
     );
     expect(renderer.postSessionUsageInfo).not.toHaveBeenCalled();
+  });
+
+  it('uses PR metadata from a provider-reported worktree in the usage bar', async () => {
+    const metadataSpy = vi
+      .spyOn(workspaceResolverModule, 'resolveWorkspaceDisplayMetadata')
+      .mockReturnValue({
+        workspaceBranch: 'feature/worktree',
+        workspacePullRequestNumber: 789,
+        workspacePullRequestUrl: 'https://github.com/Innei/kagura/pull/789',
+      });
+    const renderer = createRendererStub();
+    vi.mocked(renderer.postThreadReply).mockResolvedValue({
+      blocks: [],
+      text: 'Done',
+      ts: 'reply-ts',
+    });
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+      userId: 'U999',
+      workspaceBranch: 'main',
+      workspaceLabel: 'repo',
+      workspacePath: '/repo/source',
+    });
+    const usage = {
+      totalCostUSD: 0.01,
+      durationMs: 5000,
+      modelUsage: [
+        {
+          model: 'claude-sonnet-4',
+          inputTokens: 1000,
+          outputTokens: 500,
+          cacheReadInputTokens: 2000,
+          cacheCreationInputTokens: 100,
+          cacheHitRate: 66.7,
+          costUSD: 0.01,
+        },
+      ],
+    };
+
+    await sink.onEvent({ type: 'assistant-message', text: 'Done' });
+    await sink.onEvent({
+      type: 'workspace-context',
+      workspaceLabel: 'repo-worktree',
+      workspacePath: '/repo/worktree',
+    });
+    await sink.onEvent({ type: 'usage-info', usage });
+    await sink.onEvent({ type: 'lifecycle', phase: 'completed' });
+    await sink.finalize();
+
+    expect(renderer.appendSessionUsageInfoToThreadReply).toHaveBeenCalledWith(
+      expect.anything(),
+      'C123',
+      'ts1',
+      expect.objectContaining({ ts: 'reply-ts' }),
+      usage,
+      {
+        workspacePullRequestNumber: 789,
+        workspacePullRequestUrl: 'https://github.com/Innei/kagura/pull/789',
+      },
+    );
+
+    metadataSpy.mockRestore();
   });
 
   it('does not persist analytics when no analyticsStore provided', async () => {

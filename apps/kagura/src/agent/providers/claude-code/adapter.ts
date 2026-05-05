@@ -333,6 +333,11 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
           threadTs: request.threadTs,
         });
       },
+      workspaceContext: {
+        ...(request.workspaceLabel ? { workspaceLabel: request.workspaceLabel } : {}),
+        ...(request.workspacePath ? { workspacePath: request.workspacePath } : {}),
+        ...(request.workspaceRepoId ? { workspaceRepoId: request.workspaceRepoId } : {}),
+      },
     };
 
     let iterator: AsyncIterator<SDKMessage> | undefined;

@@ -1,9 +1,15 @@
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync,rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AgentExecutor } from '~/agent/types.js';
 import type { SessionAnalyticsStore } from '~/analytics/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { MemoryStore } from '~/memory/types.js';
+import type { ReviewSessionStore } from '~/review/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
 import type { SlackThreadContextLoader } from '~/slack/context/thread-context-loader.js';
 import type { ThreadExecutionRegistry } from '~/slack/execution/thread-execution-registry.js';
@@ -192,6 +198,7 @@ function createMinimalPipelineContext(overrides?: {
         finalizeThreadProgressMessage: vi.fn().mockResolvedValue(undefined),
         postGeneratedFiles: vi.fn().mockResolvedValue([]),
         postGeneratedImages: vi.fn().mockResolvedValue([]),
+        postReviewPanelLink: vi.fn().mockResolvedValue(undefined),
         postThreadReply: vi.fn().mockResolvedValue(undefined),
         setUiState: vi.fn().mockResolvedValue(undefined),
         showThinkingIndicator: vi.fn().mockResolvedValue(undefined),
@@ -232,6 +239,29 @@ function createMinimalPipelineContext(overrides?: {
     },
     threadTs: 'ts1',
   };
+}
+
+function createGitWorktreeFixture(): { repoPath: string; worktreePath: string } {
+  const repoPath = mkdtempSync(path.join(tmpdir(), 'pipeline-worktree-source-'));
+  const worktreePath = mkdtempSync(path.join(tmpdir(), 'pipeline-worktree-target-'));
+  rmSync(worktreePath, { force: true, recursive: true });
+  execFileSync('git', ['init', '-b', 'main'], { cwd: repoPath, stdio: 'ignore' });
+  execFileSync('git', ['config', 'user.email', 'test@example.com'], {
+    cwd: repoPath,
+    stdio: 'ignore',
+  });
+  execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: repoPath, stdio: 'ignore' });
+  writeFileSync(path.join(repoPath, 'README.md'), 'fixture\n');
+  execFileSync('git', ['add', '.'], { cwd: repoPath, stdio: 'ignore' });
+  execFileSync('git', ['-c', 'commit.gpgsign=false', 'commit', '-m', 'initial'], {
+    cwd: repoPath,
+    stdio: 'ignore',
+  });
+  execFileSync('git', ['worktree', 'add', '-b', 'feature/worktree', worktreePath], {
+    cwd: repoPath,
+    stdio: 'ignore',
+  });
+  return { repoPath, worktreePath };
 }
 
 describe('acknowledgeAndLog step', () => {
@@ -586,6 +616,72 @@ describe('executeAgent step', () => {
     );
 
     expect(unregister).toHaveBeenCalledTimes(1);
+  });
+
+  it('updates review sessions when the provider switches to a worktree', async () => {
+    const { repoPath, worktreePath } = createGitWorktreeFixture();
+    const updateWorkspaceContext = vi.fn();
+    const complete = vi.fn();
+    const start = vi.fn();
+    const ctx = createMinimalPipelineContext();
+    ctx.workspace = {
+      input: repoPath,
+      matchKind: 'repo',
+      repo: {
+        aliases: [],
+        id: 'innei-repo/slack-cc-bot',
+        label: 'slack-cc-bot',
+        name: 'slack-cc-bot',
+        relativePath: 'slack-cc-bot',
+        repoPath,
+      },
+      source: 'auto',
+      workspaceBranch: 'main',
+      workspaceLabel: 'slack-cc-bot',
+      workspacePath: repoPath,
+    };
+    ctx.deps.reviewPanelBaseUrl = 'https://kagura.example';
+    ctx.deps.reviewSessionStore = {
+      complete,
+      get: vi.fn(),
+      start,
+      updateWorkspaceContext,
+    } as unknown as ReviewSessionStore;
+    vi.mocked(ctx.deps.claudeExecutor.execute).mockImplementation(async (_request, sink) => {
+      await sink.onEvent({
+        type: 'workspace-context',
+        workspaceLabel: 'slack-cc-bot-worktree',
+        workspacePath: worktreePath,
+        workspaceRepoId: 'innei-repo/slack-cc-bot',
+      });
+      await sink.onEvent({ type: 'lifecycle', phase: 'completed' });
+    });
+    await prepareThreadContext(ctx);
+
+    await executeAgent(ctx);
+
+    expect(start).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceLabel: 'slack-cc-bot',
+        workspacePath: repoPath,
+      }),
+    );
+    expect(updateWorkspaceContext).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        baseBranch: 'feature/worktree',
+        workspaceLabel: 'slack-cc-bot-worktree',
+        workspacePath: worktreePath,
+        workspaceRepoId: 'innei-repo/slack-cc-bot',
+      }),
+    );
+    expect(complete).toHaveBeenCalledWith(
+      expect.any(String),
+      'completed',
+      execFileSync('git', ['-C', worktreePath, 'rev-parse', 'HEAD'], {
+        encoding: 'utf8',
+      }).trim(),
+    );
   });
 
   it('removes execution from registry on stop before execute settles and only calls unregister once', async () => {

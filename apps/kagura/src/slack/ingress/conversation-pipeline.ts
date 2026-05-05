@@ -328,6 +328,7 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
     deps.a2aOutputMode === 'quiet' &&
     Boolean(a2aContext || ctx.options.a2aAssignmentId || ctx.options.a2aSummaryAssignmentId);
   const workspacePath = workspace?.workspacePath;
+  let currentWorkspacePath = workspacePath;
   const initialGitHead = workspacePath ? resolveGitHead(workspacePath) : undefined;
   let initialGitStatus: string | undefined;
   if (workspacePath) {
@@ -370,7 +371,11 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
     ...(workspace ? { workspaceLabel: workspace.workspaceLabel } : {}),
     ...(reviewUrl ? { reviewUrl } : {}),
   });
-  const sink = createPersistentExecutionSink(baseSink, deps, executionId);
+  const sink = createPersistentExecutionSink(baseSink, deps, executionId, {
+    onWorkspaceContext: (event) => {
+      currentWorkspacePath = event.workspacePath;
+    },
+  });
 
   const controller = new AbortController();
   const startedAt = new Date().toISOString();
@@ -545,7 +550,7 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
     deps.reviewSessionStore?.complete(
       executionId,
       normalizeTerminalPhase(sink.terminalPhase),
-      workspace ? resolveGitHead(workspace.workspacePath) : undefined,
+      currentWorkspacePath ? resolveGitHead(currentWorkspacePath) : undefined,
     );
     triggerMemoryIngestion(ctx, executionId, executor.providerId, sink);
     resolveExecutionDone!();
@@ -564,12 +569,26 @@ function createPersistentExecutionSink(
   baseSink: ActivitySink,
   deps: SlackIngressDependencies,
   executionId: string,
+  options?: {
+    onWorkspaceContext?: (
+      event: Extract<AgentExecutionEvent, { type: 'workspace-context' }>,
+    ) => void;
+  },
 ): ActivitySink {
   return {
     finalize: () => baseSink.finalize(),
     onEvent: async (event: AgentExecutionEvent) => {
       if (event.type === 'lifecycle' && event.resumeHandle) {
         deps.persistentExecutionStore?.recordResumeHandle(executionId, event.resumeHandle);
+      }
+      if (event.type === 'workspace-context') {
+        options?.onWorkspaceContext?.(event);
+        deps.reviewSessionStore?.updateWorkspaceContext?.(executionId, {
+          baseBranch: resolveGitBranch(event.workspacePath),
+          ...(event.workspaceLabel ? { workspaceLabel: event.workspaceLabel } : {}),
+          workspacePath: event.workspacePath,
+          ...(event.workspaceRepoId ? { workspaceRepoId: event.workspaceRepoId } : {}),
+        });
       }
       await baseSink.onEvent(event);
     },

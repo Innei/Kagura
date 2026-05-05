@@ -18,6 +18,7 @@ import type { AppLogger } from '~/logger/index.js';
 import { redact } from '~/logger/redact.js';
 import type { MemoryStore } from '~/memory/types.js';
 
+import { detectWorkspaceContextFromText } from '../../workspace-context.js';
 import { parseSetChannelDefaultWorkspaceToolInput } from '../claude-code/tools/set-channel-default-workspace.js';
 import { buildCodexPrompt, getCodexRuntimePaths } from './prompt.js';
 
@@ -575,7 +576,7 @@ export class CodexCliExecutor implements AgentExecutor {
 
       case 'item.started':
       case 'item.completed': {
-        await this.handleItemEvent(event, sink, handlers.request.threadTs);
+        await this.handleItemEvent(event, sink, handlers.request);
         return;
       }
 
@@ -618,7 +619,7 @@ export class CodexCliExecutor implements AgentExecutor {
   private async handleItemEvent(
     event: CodexJsonEvent,
     sink: AgentExecutionSink,
-    threadTs: string,
+    request: AgentExecutionRequest,
   ): Promise<void> {
     const item = event.item;
     if (!item) {
@@ -628,6 +629,7 @@ export class CodexCliExecutor implements AgentExecutor {
     if (item.type === 'agent_message' && event.type === 'item.completed') {
       const text = typeof item.text === 'string' ? item.text.trim() : undefined;
       if (text) {
+        await maybeEmitWorkspaceContextFromText(text, request, sink);
         await sink.onEvent({ type: 'assistant-message', text });
       }
       return;
@@ -658,13 +660,18 @@ export class CodexCliExecutor implements AgentExecutor {
       status,
       ...(aggregatedOutput ? { details: aggregatedOutput.slice(0, 2000) } : {}),
     });
+    await maybeEmitWorkspaceContextFromText(
+      [command, aggregatedOutput].filter(Boolean).join('\n'),
+      request,
+      sink,
+    );
 
     if (status === 'in_progress') {
       await sink.onEvent({
         type: 'activity-state',
         state: {
           status: title,
-          threadTs,
+          threadTs: request.threadTs,
         },
       });
     }
@@ -758,6 +765,26 @@ function unquoteShellArgument(value: string): string | undefined {
   }
 
   return inner.replaceAll(/\\(["$\\`])/g, '$1');
+}
+
+async function maybeEmitWorkspaceContextFromText(
+  text: string,
+  request: AgentExecutionRequest,
+  sink: AgentExecutionSink,
+): Promise<void> {
+  const workspaceContext = detectWorkspaceContextFromText(text, {
+    originalWorkspaceLabel: request.workspaceLabel,
+    originalWorkspacePath: request.workspacePath,
+    workspaceRepoId: request.workspaceRepoId,
+  });
+  if (!workspaceContext) {
+    return;
+  }
+
+  await sink.onEvent({
+    type: 'workspace-context',
+    ...workspaceContext,
+  });
 }
 
 async function snapshotGeneratedArtifacts(dir: string): Promise<GeneratedArtifactSnapshot> {

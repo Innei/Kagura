@@ -6,6 +6,7 @@ import type {
   SDKAuthStatusMessage,
   SDKFilesPersistedEvent,
   SDKHookProgressMessage,
+  SDKLocalCommandOutputMessage,
   SDKMessage,
   SDKPartialAssistantMessage,
   SDKResultMessage,
@@ -19,6 +20,10 @@ import type {
 } from '@anthropic-ai/claude-agent-sdk';
 
 import type { GeneratedOutputFile, ModelUsageInfo, SessionUsageInfo } from '~/agent/types.js';
+import {
+  detectWorkspaceContextFromPath,
+  detectWorkspaceContextFromText,
+} from '~/agent/workspace-context.js';
 import type { AppLogger } from '~/logger/index.js';
 import { redact } from '~/logger/redact.js';
 import { DEFAULT_ASSISTANT_THINKING_STATUS } from '~/slack/thinking-messages.js';
@@ -58,7 +63,7 @@ export async function handleClaudeSdkMessage(
     }
 
     case 'assistant': {
-      await handleAssistantMessage(logger, message as SDKAssistantMessage, sink);
+      await handleAssistantMessage(logger, message as SDKAssistantMessage, sink, handlers);
       break;
     }
 
@@ -104,7 +109,16 @@ async function handleSystemMessage(
 ): Promise<void> {
   switch (message.subtype) {
     case 'init': {
-      handleSystemInit(logger, message as SDKSystemMessage, handlers);
+      await handleSystemInit(logger, message as SDKSystemMessage, sink, handlers);
+      return;
+    }
+
+    case 'local_command_output': {
+      await handleLocalCommandOutputMessage(
+        message as SDKLocalCommandOutputMessage,
+        sink,
+        handlers,
+      );
       return;
     }
 
@@ -143,7 +157,7 @@ async function handleSystemMessage(
     }
 
     case 'hook_progress': {
-      await handleHookProgressMessage(logger, message as SDKHookProgressMessage, handlers);
+      await handleHookProgressMessage(logger, message as SDKHookProgressMessage, sink, handlers);
       return;
     }
 
@@ -194,19 +208,29 @@ async function handleFilesPersistedMessage(
   }
 }
 
-function handleSystemInit(
+async function handleSystemInit(
   logger: AppLogger,
   message: SDKSystemMessage,
+  sink: AgentExecutionSink,
   handlers: MessageHandlers,
-): void {
+): Promise<void> {
   handlers.setSessionId(message.session_id);
   handlers.setSessionCwd(message.cwd);
+  await maybeEmitWorkspaceContextFromPath(message.cwd, sink, handlers);
   logger.info(
     'Claude Code effective session model resolved: id=%s model=%s cwd=%s',
     message.session_id,
     message.model,
     message.cwd,
   );
+}
+
+async function handleLocalCommandOutputMessage(
+  message: SDKLocalCommandOutputMessage,
+  sink: AgentExecutionSink,
+  handlers: MessageHandlers,
+): Promise<void> {
+  await maybeEmitWorkspaceContextFromText(message.content, sink, handlers);
 }
 
 async function handleApiRetryMessage(
@@ -289,6 +313,11 @@ async function handleTaskNotificationMessage(
     status,
     ...(message.output_file ? { output: message.output_file } : {}),
   });
+  await maybeEmitWorkspaceContextFromText(
+    [message.output_file, message.summary].filter(Boolean).join('\n'),
+    sink,
+    handlers,
+  );
   clearTaskStatus(handlers.runtimeUi, message.task_id);
   clearToolStatus(handlers.runtimeUi);
   await handlers.publishUiState();
@@ -335,6 +364,7 @@ async function handleSessionStateChangedMessage(
 async function handleHookProgressMessage(
   logger: AppLogger,
   message: SDKHookProgressMessage,
+  sink: AgentExecutionSink,
   handlers: MessageHandlers,
 ): Promise<void> {
   const output = summarizeProgressOutput(message.output || message.stderr || message.stdout);
@@ -347,6 +377,7 @@ async function handleHookProgressMessage(
   const hookStatus = `Running ${message.hook_name} hook...`;
   setSystemStatus(handlers.runtimeUi, 'hook', hookStatus);
   rememberLoadingMessage(handlers.runtimeUi, output || hookStatus);
+  await maybeEmitWorkspaceContextFromText(output, sink, handlers);
   await handlers.publishUiState();
 }
 
@@ -354,6 +385,7 @@ async function handleAssistantMessage(
   logger: AppLogger,
   message: SDKAssistantMessage,
   sink: AgentExecutionSink,
+  handlers: MessageHandlers,
 ): Promise<void> {
   if (message.error) {
     logger.warn('Assistant message reported error=%s', message.error);
@@ -368,6 +400,7 @@ async function handleAssistantMessage(
     'Assistant message completed; emitting Slack reply payload (%d chars)',
     completedText.length,
   );
+  await maybeEmitWorkspaceContextFromText(completedText, sink, handlers);
   await sink.onEvent({ type: 'assistant-message', text: completedText });
 }
 
@@ -395,6 +428,50 @@ async function handleAuthStatusMessage(
   }
 
   await handlers.publishUiState();
+}
+
+async function maybeEmitWorkspaceContextFromPath(
+  workspacePath: string,
+  sink: AgentExecutionSink,
+  handlers: MessageHandlers,
+): Promise<void> {
+  const workspaceContext = detectWorkspaceContextFromPath(workspacePath, {
+    originalWorkspaceLabel: handlers.workspaceContext?.workspaceLabel,
+    originalWorkspacePath: handlers.workspaceContext?.workspacePath,
+    workspaceRepoId: handlers.workspaceContext?.workspaceRepoId,
+  });
+  if (!workspaceContext) {
+    return;
+  }
+
+  await sink.onEvent({
+    type: 'workspace-context',
+    ...workspaceContext,
+  });
+}
+
+async function maybeEmitWorkspaceContextFromText(
+  text: string,
+  sink: AgentExecutionSink,
+  handlers: MessageHandlers,
+): Promise<void> {
+  if (!text.trim()) {
+    return;
+  }
+
+  const workspaceContext = detectWorkspaceContextFromText(text, {
+    originalWorkspaceLabel: handlers.workspaceContext?.workspaceLabel,
+    originalWorkspacePath: handlers.workspaceContext?.workspacePath,
+    workspaceRepoId: handlers.workspaceContext?.workspaceRepoId,
+  });
+  if (!workspaceContext) {
+    return;
+  }
+
+  await sink.onEvent({
+    type: 'workspace-context',
+    ...workspaceContext,
+  });
 }
 
 async function handleToolProgressMessage(
