@@ -62,6 +62,11 @@ export interface MessageHandlers {
   runtimeUi: RuntimeUiStateTracker;
   setSessionCwd: (cwd: string) => void;
   setSessionId: (id: string) => void;
+  workspaceContext?: {
+    workspaceLabel?: string | undefined;
+    workspacePath?: string | undefined;
+    workspaceRepoId?: string | undefined;
+  };
 }
 
 export interface ResolvedMemoryScope {

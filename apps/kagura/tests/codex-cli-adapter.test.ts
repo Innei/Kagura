@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -17,9 +18,13 @@ import type { AppLogger } from '~/logger/index.js';
 
 const spawnMock = vi.hoisted(() => vi.fn());
 
-vi.mock('node:child_process', () => ({
-  spawn: spawnMock,
-}));
+vi.mock('node:child_process', async () => {
+  const actual = await vi.importActual<typeof import('node:child_process')>('node:child_process');
+  return {
+    ...actual,
+    spawn: spawnMock,
+  };
+});
 
 class FakeCodexProcess extends EventEmitter {
   readonly stderr = new PassThrough();
@@ -115,6 +120,33 @@ function createChannelPreferenceStore(
       return record;
     }),
   };
+}
+
+function createGitWorktreeFixture(): { repoPath: string; worktreePath: string } {
+  const repoPath = mkdtempSync(path.join(tmpdir(), 'codex-worktree-source-'));
+  const worktreePath = mkdtempSync(path.join(tmpdir(), 'codex-worktree-target-'));
+  execFileSync('rm', ['-rf', worktreePath]);
+  execFileSync('git', ['init', '-b', 'main'], { cwd: repoPath, stdio: 'ignore' });
+  execFileSync('git', ['config', 'user.email', 'test@example.com'], {
+    cwd: repoPath,
+    stdio: 'ignore',
+  });
+  execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: repoPath, stdio: 'ignore' });
+  writeFileSync(path.join(repoPath, 'README.md'), 'fixture\n');
+  execFileSync('git', ['add', '.'], { cwd: repoPath, stdio: 'ignore' });
+  execFileSync('git', ['-c', 'commit.gpgsign=false', 'commit', '-m', 'initial'], {
+    cwd: repoPath,
+    stdio: 'ignore',
+  });
+  execFileSync('git', ['remote', 'add', 'origin', 'git@example.com:Innei/kagura.git'], {
+    cwd: repoPath,
+    stdio: 'ignore',
+  });
+  execFileSync('git', ['worktree', 'add', '-b', 'feature/worktree', worktreePath], {
+    cwd: repoPath,
+    stdio: 'ignore',
+  });
+  return { repoPath, worktreePath };
 }
 
 describe('CodexCliExecutor', () => {
@@ -228,6 +260,56 @@ describe('CodexCliExecutor', () => {
       type: 'lifecycle',
       phase: 'completed',
       resumeHandle: 'codex-thread-1',
+    });
+  });
+
+  it('emits workspace context when Codex reports worktree activity', async () => {
+    const { repoPath, worktreePath } = createGitWorktreeFixture();
+    const request = createRequest({
+      workspaceLabel: 'slack-cc-bot',
+      workspacePath: repoPath,
+      workspaceRepoId: 'innei-repo/slack-cc-bot',
+    });
+
+    spawnMock.mockImplementation(
+      () =>
+        new FakeCodexProcess((_prompt, child) => {
+          queueMicrotask(() => {
+            writeJson(child, { type: 'thread.started', thread_id: 'codex-thread-1' });
+            writeJson(child, {
+              type: 'item.completed',
+              item: {
+                id: 'msg-1',
+                type: 'agent_message',
+                text: `Implemented in ${worktreePath}`,
+              },
+            });
+            child.stdout.end();
+            child.stderr.end();
+            child.emit('exit', 0, null);
+          });
+        }),
+    );
+
+    const events: AgentExecutionEvent[] = [];
+    await new CodexCliExecutor(createLogger()).execute(request, createSink(events));
+
+    const resolvedWorktreePath = execFileSync(
+      'git',
+      ['-C', worktreePath, 'rev-parse', '--show-toplevel'],
+      {
+        encoding: 'utf8',
+      },
+    ).trim();
+    expect(events).toContainEqual({
+      type: 'workspace-context',
+      workspaceLabel: path.basename(worktreePath),
+      workspacePath: resolvedWorktreePath,
+      workspaceRepoId: 'innei-repo/slack-cc-bot',
+    });
+    expect(events).toContainEqual({
+      type: 'assistant-message',
+      text: `Implemented in ${worktreePath}`,
     });
   });
 

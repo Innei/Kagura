@@ -105,8 +105,8 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     userId,
     userInputBridge,
     workspaceBranch,
-    workspaceLabel,
-    workspacePath,
+    workspaceLabel: initialWorkspaceLabel,
+    workspacePath: initialWorkspacePath,
     workspacePullRequestNumber,
     workspacePullRequestUrl,
   } = options;
@@ -130,6 +130,8 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
   let toolbarReply: PostedThreadReply | undefined;
   const quietAssistantMessages: string[] = [];
   let currentWorkspaceBranch = workspaceBranch;
+  let currentWorkspaceLabel = initialWorkspaceLabel;
+  let currentWorkspacePath = initialWorkspacePath;
   let currentWorkspacePullRequestNumber = workspacePullRequestNumber;
   let currentWorkspacePullRequestUrl = workspacePullRequestUrl;
 
@@ -157,11 +159,12 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
   };
 
   const maybeRefreshWorkspaceContext = async (): Promise<void> => {
-    if (!workspacePath || !workspaceLabel) {
+    const workspaceLabel = currentWorkspaceLabel;
+    if (!currentWorkspacePath || !workspaceLabel) {
       return;
     }
 
-    const nextMetadata = resolveWorkspaceDisplayMetadata(workspacePath);
+    const nextMetadata = resolveWorkspaceDisplayMetadata(currentWorkspacePath);
     const changed =
       nextMetadata.workspaceBranch !== currentWorkspaceBranch ||
       nextMetadata.workspacePullRequestNumber !== currentWorkspacePullRequestNumber ||
@@ -300,7 +303,9 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
         ...(includeToolbar && currentWorkspaceBranch
           ? { workspaceBranch: currentWorkspaceBranch }
           : {}),
-        ...(includeToolbar && workspaceLabel ? { workspaceLabel } : {}),
+        ...(includeToolbar && currentWorkspaceLabel
+          ? { workspaceLabel: currentWorkspaceLabel }
+          : {}),
         ...(includeToolbar && currentWorkspacePullRequestNumber
           ? { workspacePullRequestNumber: currentWorkspacePullRequestNumber }
           : {}),
@@ -493,8 +498,44 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     }
   };
 
+  const handleWorkspaceContext = async (
+    event: Extract<AgentExecutionEvent, { type: 'workspace-context' }>,
+  ): Promise<void> => {
+    currentWorkspacePath = event.workspacePath;
+    currentWorkspaceLabel = event.workspaceLabel ?? currentWorkspaceLabel ?? event.workspacePath;
+
+    sessionStore.patch(threadTs, {
+      workspaceLabel: currentWorkspaceLabel,
+      workspacePath: currentWorkspacePath,
+      ...(event.workspaceRepoId ? { workspaceRepoId: event.workspaceRepoId } : {}),
+    });
+
+    const nextMetadata = resolveWorkspaceDisplayMetadata(currentWorkspacePath);
+    currentWorkspaceBranch = nextMetadata.workspaceBranch;
+    currentWorkspacePullRequestNumber = nextMetadata.workspacePullRequestNumber;
+    currentWorkspacePullRequestUrl = nextMetadata.workspacePullRequestUrl;
+
+    if (!toolbarReply || !hasSentToolbarInTurn) {
+      return;
+    }
+
+    const updatedReply = await safeRender('update assistant workspace context', () =>
+      renderer.updateThreadReplyWorkspaceContext(client, channel, threadTs, toolbarReply!, {
+        ...(currentWorkspaceBranch ? { workspaceBranch: currentWorkspaceBranch } : {}),
+        workspaceLabel: currentWorkspaceLabel!,
+      }),
+    );
+
+    if (updatedReply) {
+      toolbarReply = updatedReply;
+      if (lastAssistantReply?.ts === updatedReply.ts) {
+        lastAssistantReply = updatedReply;
+      }
+    }
+  };
+
   function hasWorkspaceChanges(): boolean {
-    const cwd = workspacePath;
+    const cwd = currentWorkspacePath;
     if (!cwd || !initialGitHead) return true; // no snapshot, assume changed
     try {
       const currentHead = execFileSync('git', ['-C', cwd, 'rev-parse', 'HEAD'], {
@@ -620,6 +661,10 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     },
 
     async onEvent(event: AgentExecutionEvent): Promise<void> {
+      if (event.type === 'workspace-context') {
+        await handleWorkspaceContext(event);
+        return;
+      }
       if (event.type === 'assistant-message') {
         await handleAssistantMessage(event.text);
         return;

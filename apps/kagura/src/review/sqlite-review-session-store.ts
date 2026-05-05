@@ -62,6 +62,28 @@ export class SqliteReviewSessionStore implements ReviewSessionStore {
       .run();
   }
 
+  updateWorkspaceContext(
+    executionId: string,
+    input: {
+      baseBranch?: string | undefined;
+      workspaceLabel?: string | undefined;
+      workspacePath: string;
+      workspaceRepoId?: string | undefined;
+    },
+  ): void {
+    this.db
+      .update(reviewSessions)
+      .set({
+        baseBranch: input.baseBranch ?? null,
+        updatedAt: new Date().toISOString(),
+        workspaceLabel: input.workspaceLabel ?? null,
+        workspacePath: input.workspacePath,
+        workspaceRepoId: input.workspaceRepoId ?? null,
+      })
+      .where(eq(reviewSessions.executionId, executionId))
+      .run();
+  }
+
   get(executionId: string): ReviewSessionRecord | undefined {
     const row = this.db
       .select()

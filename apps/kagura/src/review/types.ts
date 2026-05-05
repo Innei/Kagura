@@ -35,4 +35,13 @@ export interface ReviewSessionStore {
   ) => void;
   get: (executionId: string) => ReviewSessionRecord | undefined;
   start: (input: StartReviewSessionInput) => void;
+  updateWorkspaceContext?: (
+    executionId: string,
+    input: {
+      baseBranch?: string | undefined;
+      workspaceLabel?: string | undefined;
+      workspacePath: string;
+      workspaceRepoId?: string | undefined;
+    },
+  ) => void;
 }
