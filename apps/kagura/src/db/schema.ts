@@ -88,6 +88,8 @@ export const reviewSessions = sqliteTable('review_sessions', {
   baseHead: text('base_head'),
   baseBranch: text('base_branch'),
   head: text('head'),
+  diffSnapshot: text('diff_snapshot'),
+  changedFilesSnapshot: text('changed_files_snapshot'),
   status: text('status').notNull(),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),

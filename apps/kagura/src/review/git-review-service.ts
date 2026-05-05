@@ -22,6 +22,11 @@ export interface ReviewSessionDetails extends ReviewSessionRecord {
   changedFiles: ReviewChangedFile[];
 }
 
+export interface ReviewSessionSnapshot {
+  changedFilesSnapshot: string;
+  diffSnapshot: string;
+}
+
 export class GitReviewService {
   constructor(private readonly store: ReviewSessionStore) {}
 
@@ -31,7 +36,7 @@ export class GitReviewService {
 
     return {
       ...session,
-      changedFiles: getChangedFiles(session),
+      changedFiles: readChangedFilesSnapshot(session) ?? getChangedFiles(session),
     };
   }
 
@@ -59,6 +64,12 @@ export class GitReviewService {
   getDiff(executionId: string, filePath?: string | undefined): string | undefined {
     const session = this.store.get(executionId);
     if (!session) return undefined;
+
+    if (session.diffSnapshot !== undefined) {
+      if (!filePath) return session.diffSnapshot;
+      const relativePath = validateRelativeFilePath(filePath);
+      return filterDiffSnapshotForPath(session.diffSnapshot, relativePath);
+    }
 
     const args = ['diff', '--no-ext-diff', '--find-renames', session.baseHead ?? 'HEAD'];
     if (filePath) {
@@ -99,6 +110,13 @@ export class GitReviewService {
       return { content: blob, path: relativePath };
     }
 
+    if (session.diffSnapshot !== undefined && session.status !== 'running') {
+      if (!session.head || session.head === session.baseHead) return undefined;
+      const blob = readGitBlob(session.workspacePath, session.head, relativePath);
+      if (blob === undefined) return undefined;
+      return { content: blob, path: relativePath };
+    }
+
     const absolutePath = path.resolve(session.workspacePath, relativePath);
     const realWorkspace = await fs.realpath(session.workspacePath);
     const realTarget = await fs.realpath(absolutePath).catch(() => undefined);
@@ -116,6 +134,15 @@ export class GitReviewService {
       .catch(() => '[binary or unreadable file]');
     return { content, path: relativePath };
   }
+}
+
+export function createReviewSessionSnapshot(session: ReviewSessionRecord): ReviewSessionSnapshot {
+  const changedFiles = getChangedFiles(session);
+  const diff = buildDiff(session);
+  return {
+    changedFilesSnapshot: JSON.stringify(changedFiles),
+    diffSnapshot: diff,
+  };
 }
 
 export function resolveGitHead(workspacePath: string): string | undefined {
@@ -145,6 +172,7 @@ function getChangedFiles(session: ReviewSessionRecord): ReviewChangedFile[] {
     '\n',
   )) {
     if (!statusEntry.trim()) continue;
+    if (!statusEntry.startsWith('??')) continue;
     const filePath = parsePorcelainPath(statusEntry);
     if (!filePath || seen.has(filePath)) continue;
     changed.push({ path: filePath, status: statusEntry.slice(0, 2).trim() || '?' });
@@ -166,6 +194,62 @@ function getChangedFiles(session: ReviewSessionRecord): ReviewChangedFile[] {
   }
 
   return changed.sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function buildDiff(session: ReviewSessionRecord): string {
+  const diff = runGit(session.workspacePath, [
+    'diff',
+    '--no-ext-diff',
+    '--find-renames',
+    session.baseHead ?? 'HEAD',
+  ]);
+  const untrackedDiffs = getChangedFiles(session)
+    .filter((file) => file.status === '??')
+    .map((file) => renderUntrackedFileDiff(session.workspacePath, file.path))
+    .filter(Boolean);
+  return [diff, ...untrackedDiffs].filter(Boolean).join('\n');
+}
+
+function readChangedFilesSnapshot(session: ReviewSessionRecord): ReviewChangedFile[] | undefined {
+  if (session.changedFilesSnapshot === undefined) return undefined;
+  try {
+    const parsed = JSON.parse(session.changedFilesSnapshot);
+    if (!Array.isArray(parsed)) return undefined;
+    return parsed.filter(isReviewChangedFile);
+  } catch {
+    return undefined;
+  }
+}
+
+function isReviewChangedFile(value: unknown): value is ReviewChangedFile {
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  return typeof record.path === 'string' && typeof record.status === 'string';
+}
+
+function filterDiffSnapshotForPath(diff: string, filePath: string): string {
+  return splitGitDiff(diff)
+    .filter((patch) => patchMatchesPath(patch, filePath))
+    .join('\n');
+}
+
+function splitGitDiff(diff: string): string[] {
+  const chunks = diff.split(/(?=^diff --git )/gm).filter((chunk) => chunk.trim());
+  return chunks.length > 0 ? chunks : diff.trim() ? [diff] : [];
+}
+
+function patchMatchesPath(patch: string, filePath: string): boolean {
+  const escaped = escapeRegExp(filePath);
+  return (
+    new RegExp(`^diff --git a/${escaped} b/`, 'm').test(patch) ||
+    new RegExp(`^diff --git a/.+ b/${escaped}$`, 'm').test(patch) ||
+    new RegExp(`^--- a/${escaped}$`, 'm').test(patch) ||
+    new RegExp(`^\\+\\+\\+ b/${escaped}$`, 'm').test(patch)
+  );
+}
+
+function escapeRegExp(value: string): string {
+  return value.replaceAll(/[$()*+.?[\\\]^{|}]/g, '\\$&');
 }
 
 function parseNumstat(raw: string): Map<string, { additions: number; deletions: number }> {

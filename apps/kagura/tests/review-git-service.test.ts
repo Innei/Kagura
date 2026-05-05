@@ -62,6 +62,90 @@ describe('GitReviewService', () => {
     sqlite.close();
   });
 
+  it('freezes completed review diffs as a snapshot', async () => {
+    const workspacePath = createGitFixture();
+    const baseHead = resolveGitHead(workspacePath);
+    expect(baseHead).toBeTruthy();
+
+    fs.writeFileSync(path.join(workspacePath, 'src/index.ts'), 'export const value = 2;\n');
+    fs.writeFileSync(path.join(workspacePath, 'src/new.ts'), 'export const added = true;\n');
+
+    const { db, sqlite } = createTestDatabase();
+    const store = new SqliteReviewSessionStore(db);
+    store.start({
+      baseBranch: 'main',
+      baseHead,
+      channelId: 'C1',
+      createdAt: new Date().toISOString(),
+      executionId: 'exec-snapshot',
+      threadTs: '123.456',
+      workspaceLabel: 'fixture',
+      workspacePath,
+      workspaceRepoId: 'fixture',
+    });
+
+    const service = new GitReviewService(store);
+    const before = service.getSession('exec-snapshot');
+    expect(before).toBeTruthy();
+    store.complete('exec-snapshot', 'completed', {
+      changedFilesSnapshot: JSON.stringify(before?.changedFiles ?? []),
+      diffSnapshot: service.getDiff('exec-snapshot') ?? '',
+      head: resolveGitHead(workspacePath),
+    });
+
+    fs.writeFileSync(path.join(workspacePath, 'src/index.ts'), 'export const value = 3;\n');
+    fs.writeFileSync(path.join(workspacePath, 'src/later.ts'), 'export const later = true;\n');
+
+    const session = service.getSession('exec-snapshot');
+    expect(session?.changedFiles).toEqual([
+      { path: 'src/index.ts', status: 'M', additions: 1, deletions: 1 },
+      { path: 'src/new.ts', status: '??', additions: 1, deletions: 0 },
+    ]);
+
+    const fullDiff = service.getDiff('exec-snapshot') ?? '';
+    expect(fullDiff).toContain('export const value = 2;');
+    expect(fullDiff).not.toContain('export const value = 3;');
+    expect(fullDiff).not.toContain('src/later.ts');
+
+    const fileDiff = service.getDiff('exec-snapshot', 'src/index.ts') ?? '';
+    expect(fileDiff).toContain('diff --git a/src/index.ts b/src/index.ts');
+    expect(fileDiff).not.toContain('src/new.ts');
+
+    await expect(service.getFile('exec-snapshot', 'src/index.ts', 'head')).resolves.toBeUndefined();
+
+    sqlite.close();
+  });
+
+  it('does not surface tracked status entries that have no diff against base', () => {
+    const workspacePath = createGitFixture();
+    const baseHead = resolveGitHead(workspacePath);
+    expect(baseHead).toBeTruthy();
+
+    fs.writeFileSync(path.join(workspacePath, 'src/index.ts'), 'export const value = 2;\n');
+    git(workspacePath, ['add', 'src/index.ts']);
+    fs.writeFileSync(path.join(workspacePath, 'src/index.ts'), 'export const value = 1;\n');
+
+    const { db, sqlite } = createTestDatabase();
+    const store = new SqliteReviewSessionStore(db);
+    store.start({
+      baseBranch: 'main',
+      baseHead,
+      channelId: 'C1',
+      createdAt: new Date().toISOString(),
+      executionId: 'exec-status',
+      threadTs: '123.456',
+      workspaceLabel: 'fixture',
+      workspacePath,
+      workspaceRepoId: 'fixture',
+    });
+
+    const service = new GitReviewService(store);
+    expect(service.getSession('exec-status')?.changedFiles).toEqual([]);
+    expect(service.getDiff('exec-status')).toBe('');
+
+    sqlite.close();
+  });
+
   it('returns base file via git show and head from working tree', async () => {
     const workspacePath = createGitFixture();
     const baseHead = resolveGitHead(workspacePath);

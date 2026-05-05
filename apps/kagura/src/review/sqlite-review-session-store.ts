@@ -49,12 +49,25 @@ export class SqliteReviewSessionStore implements ReviewSessionStore {
   complete(
     executionId: string,
     status: Exclude<ReviewSessionStatus, 'running'>,
-    head?: string | undefined,
+    result?:
+      | string
+      | {
+          changedFilesSnapshot?: string | undefined;
+          diffSnapshot?: string | undefined;
+          head?: string | undefined;
+        }
+      | undefined,
   ): void {
+    const completion =
+      typeof result === 'string' || result === undefined ? { head: result } : result;
     this.db
       .update(reviewSessions)
       .set({
-        head: head ?? null,
+        ...(completion.changedFilesSnapshot !== undefined
+          ? { changedFilesSnapshot: completion.changedFilesSnapshot }
+          : {}),
+        ...(completion.diffSnapshot !== undefined ? { diffSnapshot: completion.diffSnapshot } : {}),
+        head: completion.head ?? null,
         status,
         updatedAt: new Date().toISOString(),
       })
@@ -106,6 +119,8 @@ function rowToRecord(row: typeof reviewSessions.$inferSelect): ReviewSessionReco
     workspacePath: row.workspacePath,
     ...(row.baseBranch ? { baseBranch: row.baseBranch } : {}),
     ...(row.baseHead ? { baseHead: row.baseHead } : {}),
+    ...(row.changedFilesSnapshot ? { changedFilesSnapshot: row.changedFilesSnapshot } : {}),
+    ...(row.diffSnapshot ? { diffSnapshot: row.diffSnapshot } : {}),
     ...(row.head ? { head: row.head } : {}),
     ...(row.workspaceLabel ? { workspaceLabel: row.workspaceLabel } : {}),
     ...(row.workspaceRepoId ? { workspaceRepoId: row.workspaceRepoId } : {}),

@@ -3,8 +3,10 @@ export type ReviewSessionStatus = 'running' | 'completed' | 'failed' | 'stopped'
 export interface ReviewSessionRecord {
   baseBranch?: string | undefined;
   baseHead?: string | undefined;
+  changedFilesSnapshot?: string | undefined;
   channelId: string;
   createdAt: string;
+  diffSnapshot?: string | undefined;
   executionId: string;
   head?: string | undefined;
   status: ReviewSessionStatus;
@@ -31,7 +33,14 @@ export interface ReviewSessionStore {
   complete: (
     executionId: string,
     status: Exclude<ReviewSessionStatus, 'running'>,
-    head?: string | undefined,
+    result?:
+      | string
+      | {
+          changedFilesSnapshot?: string | undefined;
+          diffSnapshot?: string | undefined;
+          head?: string | undefined;
+        }
+      | undefined,
   ) => void;
   get: (executionId: string) => ReviewSessionRecord | undefined;
   start: (input: StartReviewSessionInput) => void;

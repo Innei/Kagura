@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync,rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -678,9 +678,11 @@ describe('executeAgent step', () => {
     expect(complete).toHaveBeenCalledWith(
       expect.any(String),
       'completed',
-      execFileSync('git', ['-C', worktreePath, 'rev-parse', 'HEAD'], {
-        encoding: 'utf8',
-      }).trim(),
+      expect.objectContaining({
+        head: execFileSync('git', ['-C', worktreePath, 'rev-parse', 'HEAD'], {
+          encoding: 'utf8',
+        }).trim(),
+      }),
     );
   });
 

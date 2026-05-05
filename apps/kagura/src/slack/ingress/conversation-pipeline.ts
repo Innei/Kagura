@@ -4,7 +4,11 @@ import { randomUUID } from 'node:crypto';
 import type { AgentExecutionEvent, AgentExecutor } from '~/agent/types.js';
 import { redact } from '~/logger/redact.js';
 import { runtimeError, runtimeInfo, runtimeWarn } from '~/logger/runtime.js';
-import { resolveGitBranch, resolveGitHead } from '~/review/git-review-service.js';
+import {
+  createReviewSessionSnapshot,
+  resolveGitBranch,
+  resolveGitHead,
+} from '~/review/git-review-service.js';
 import type { SessionRecord } from '~/session/types.js';
 import { formatClaudeExecutionFailureReply } from '~/util/error-detail.js';
 import { enrichResolvedWorkspace } from '~/workspace/resolver.js';
@@ -550,11 +554,21 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
       normalizeTerminalPhase(sink.terminalPhase),
       sink.terminalPhase,
     );
-    deps.reviewSessionStore?.complete(
-      executionId,
-      normalizeTerminalPhase(sink.terminalPhase),
-      currentWorkspacePath ? resolveGitHead(currentWorkspacePath) : undefined,
-    );
+    const terminalStatus = normalizeTerminalPhase(sink.terminalPhase);
+    const finalHead = currentWorkspacePath ? resolveGitHead(currentWorkspacePath) : undefined;
+    const reviewSession = deps.reviewSessionStore?.get(executionId);
+    const reviewSnapshot =
+      reviewSession && terminalStatus === 'completed'
+        ? createReviewSessionSnapshot({
+            ...reviewSession,
+            ...(currentWorkspacePath ? { workspacePath: currentWorkspacePath } : {}),
+            ...(finalHead ? { head: finalHead } : {}),
+          })
+        : undefined;
+    deps.reviewSessionStore?.complete(executionId, terminalStatus, {
+      ...reviewSnapshot,
+      ...(finalHead ? { head: finalHead } : {}),
+    });
     triggerMemoryIngestion(ctx, executionId, executor.providerId, sink);
     resolveExecutionDone!();
     runtimeInfo(
