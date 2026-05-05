@@ -243,6 +243,11 @@ function delay(ms: number): Promise<void> {
 
 export const scenario: LiveE2EScenario = {
   id: 'pi-agent-provider',
+  provider: {
+    kind: 'specific',
+    providerId: 'pi-agent',
+    reason: 'Dedicated Pi Agent provider smoke test.',
+  },
   title: 'Pi Agent Provider',
   description:
     'Verify that the pi-agent provider can answer from Slack and render Pi status, tool progress, and usage context.',

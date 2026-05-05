@@ -6,12 +6,12 @@ import path from 'node:path';
 
 import Database from 'better-sqlite3';
 
-import { createApplication } from '~/application.js';
 import { env } from '~/env/server.js';
 import type { SlackStatusProbeRecord } from '~/slack/render/status-probe.js';
 import { THINKING_LOADING_MESSAGES, THINKING_STATUS_MESSAGES } from '~/slack/thinking-messages.js';
 
 import { readSlackStatusProbeFile, resetSlackStatusProbeFile } from './file-slack-status-probe.js';
+import { createLiveApplication } from './live-application.js';
 import type { LiveE2EScenario } from './scenario.js';
 import { runDirectly } from './scenario.js';
 import {
@@ -77,7 +77,7 @@ async function main(): Promise<void> {
 
   await resetSlackStatusProbeFile(env.SLACK_E2E_STATUS_PROBE_PATH);
 
-  let application = createApplication();
+  let application = createLiveApplication();
   const botIdentity = await botClient.authTest();
   const triggerIdentity = await triggerClient.authTest();
   const result: LiveE2EResult = {
@@ -126,7 +126,7 @@ async function main(): Promise<void> {
     assertLiveE2EResult(result);
 
     await application.stop();
-    application = createApplication();
+    application = createLiveApplication();
     await application.start();
     await delay(3_000);
 

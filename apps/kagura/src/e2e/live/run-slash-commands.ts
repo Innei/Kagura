@@ -3,10 +3,8 @@ import './load-e2e-env.js';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 
-import { ClaudeAgentSdkExecutor } from '~/agent/providers/claude-code/adapter.js';
 import { createProviderRegistry } from '~/agent/registry.js';
-import type { AgentExecutor } from '~/agent/types.js';
-import { createApplication } from '~/application.js';
+import type { AgentExecutionRequest, AgentExecutionSink, AgentExecutor } from '~/agent/types.js';
 import { SqliteChannelPreferenceStore } from '~/channel-preference/sqlite-channel-preference-store.js';
 import { createDatabase } from '~/db/index.js';
 import { env } from '~/env/server.js';
@@ -22,6 +20,7 @@ import { handleWorkspaceCommand } from '~/slack/commands/workspace-command.js';
 import { createThreadExecutionRegistry } from '~/slack/execution/thread-execution-registry.js';
 import { WorkspaceResolver } from '~/workspace/resolver.js';
 
+import { createLiveApplication } from './live-application.js';
 import type { LiveE2EScenario } from './scenario.js';
 import { runDirectly } from './scenario.js';
 import { SlackApiClient } from './slack-api-client.js';
@@ -59,7 +58,7 @@ async function main(): Promise<void> {
     passed: false,
   };
 
-  const application = createApplication();
+  const application = createLiveApplication();
   let caughtError: unknown;
 
   try {
@@ -106,25 +105,32 @@ function buildCommandDeps(): SlashCommandDependencies {
     db,
     logger.withTag('channel-preference'),
   );
-  const ccExecutor = new ClaudeAgentSdkExecutor(
-    logger.withTag('claude:session'),
-    memoryStore,
-    channelPreferenceStore,
-  );
+  const executors = new Map<string, AgentExecutor>([
+    ['claude-code', createCommandOnlyExecutor('claude-code')],
+    ['codex-cli', createCommandOnlyExecutor('codex-cli')],
+    ['pi-agent', createCommandOnlyExecutor('pi-agent')],
+  ]);
 
   return {
     logger,
     memoryStore,
-    providerRegistry: createProviderRegistry(
-      'claude-code',
-      new Map<string, AgentExecutor>([['claude-code', ccExecutor]]),
-    ),
+    providerRegistry: createProviderRegistry(env.AGENT_DEFAULT_PROVIDER, executors),
     sessionStore: new SqliteSessionStore(db, logger.withTag('session')),
     threadExecutionRegistry: createThreadExecutionRegistry(),
     workspaceResolver: new WorkspaceResolver({
       repoRootDir: env.REPO_ROOT_DIR,
       scanDepth: env.REPO_SCAN_DEPTH,
     }),
+  };
+}
+
+function createCommandOnlyExecutor(providerId: string): AgentExecutor {
+  return {
+    providerId,
+    async drain() {},
+    async execute(_request: AgentExecutionRequest, _sink: AgentExecutionSink) {
+      throw new Error(`Slash command E2E command-only executor cannot run ${providerId}`);
+    },
   };
 }
 

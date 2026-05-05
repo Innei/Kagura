@@ -9,7 +9,7 @@ import pc from 'picocolors';
 import { discoverScenarios, filterScenarios, resolveByIds } from './discovery.js';
 import { promptInteractive } from './prompt.js';
 import { formatSummary, runScenarios } from './runner.js';
-import type { LiveE2EScenario } from './types.js';
+import type { LiveE2EProviderId, LiveE2EScenario } from './types.js';
 
 const isTTY = process.stdout.isTTY === true;
 
@@ -87,6 +87,27 @@ async function actionRun(
     }
   } else {
     selected = all;
+  }
+
+  const providerFilter = resolveProviderFilter();
+  if (providerFilter) {
+    const skipped = selected.filter((scenario) => !isProviderCompatible(scenario, providerFilter));
+    selected = selected.filter((scenario) => isProviderCompatible(scenario, providerFilter));
+    if (skipped.length > 0) {
+      const message = `Skipping ${skipped.length} provider-specific scenario(s) incompatible with ${providerFilter}: ${skipped
+        .map((scenario) => scenario.id)
+        .join(', ')}`;
+      if (isTTY) {
+        p.log.info(message);
+      } else {
+        console.info(message);
+      }
+    }
+    if (selected.length === 0) {
+      p.log.error(`No scenarios are compatible with SLACK_E2E_PROVIDER_ID=${providerFilter}.`);
+      process.exitCode = 1;
+      return;
+    }
   }
 
   if (isTTY) {
@@ -172,3 +193,19 @@ program
   );
 
 program.parse([process.argv[0]!, process.argv[1]!, ...preprocessArgv()]);
+
+function resolveProviderFilter(): LiveE2EProviderId | undefined {
+  const raw = process.env.SLACK_E2E_PROVIDER_ID?.trim();
+  if (!raw) return undefined;
+  if (raw === 'claude-code' || raw === 'codex-cli' || raw === 'pi-agent') return raw;
+  throw new Error(
+    `Unsupported SLACK_E2E_PROVIDER_ID "${raw}". Expected one of: claude-code, codex-cli, pi-agent`,
+  );
+}
+
+function isProviderCompatible(scenario: LiveE2EScenario, providerId: LiveE2EProviderId): boolean {
+  if (!scenario.provider || scenario.provider.kind === 'generic') {
+    return true;
+  }
+  return scenario.provider.providerId === providerId;
+}

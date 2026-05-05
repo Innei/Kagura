@@ -4,9 +4,10 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { createApplication } from '~/application.js';
 import { env } from '~/env/server.js';
 
+import { applyLiveE2EDatabaseMigrations } from './db-migrations.js';
+import { createLiveApplication } from './live-application.js';
 import type { LiveE2EScenario } from './scenario.js';
 import { runDirectly } from './scenario.js';
 import { SlackApiClient, type SlackConversationRepliesResponse } from './slack-api-client.js';
@@ -61,6 +62,10 @@ async function main(): Promise<void> {
     `S${runId.replaceAll('-', '').slice(0, 12).toUpperCase()}`;
   const runSuffix = `a2a-routing-${runId.slice(0, 8)}`;
   const coordinatorDbPath = withPathSuffix(env.SESSION_DB_PATH, runSuffix);
+  const appOneSessionDbPath = withPathSuffix(env.SESSION_DB_PATH, `${runSuffix}-app1`);
+  const appTwoSessionDbPath = withPathSuffix(env.SESSION_DB_PATH, `${runSuffix}-app2`);
+  applyLiveE2EDatabaseMigrations(appOneSessionDbPath);
+  applyLiveE2EDatabaseMigrations(appTwoSessionDbPath);
   const agentTeams = {
     [teamMentionId]: {
       defaultLead: appOneIdentity.user_id,
@@ -88,20 +93,20 @@ async function main(): Promise<void> {
     unexpected: [],
   };
 
-  const appOne = createApplication({
+  const appOne = createLiveApplication({
     a2aCoordinatorDbPath: coordinatorDbPath,
     agentTeams,
     executionProbePath: withPathSuffix(env.SLACK_E2E_EXECUTION_PROBE_PATH, `${runSuffix}-app1`),
     instanceLabel: 'bootstrap:a2a-routing-lead',
-    sessionDbPath: withPathSuffix(env.SESSION_DB_PATH, `${runSuffix}-app1`),
+    sessionDbPath: appOneSessionDbPath,
     statusProbePath: withPathSuffix(env.SLACK_E2E_STATUS_PROBE_PATH, `${runSuffix}-app1`),
   });
-  const appTwo = createApplication({
+  const appTwo = createLiveApplication({
     a2aCoordinatorDbPath: coordinatorDbPath,
     agentTeams,
     executionProbePath: withPathSuffix(env.SLACK_E2E_EXECUTION_PROBE_PATH, `${runSuffix}-app2`),
     instanceLabel: 'bootstrap:a2a-routing-standby',
-    sessionDbPath: withPathSuffix(env.SESSION_DB_PATH, `${runSuffix}-app2`),
+    sessionDbPath: appTwoSessionDbPath,
     skipManifestSync: true,
     slackCredentials: {
       appToken: env.SLACK_APP_2_TOKEN,
@@ -473,8 +478,8 @@ function withPathSuffix(rawPath: string, suffix: string): string {
 }
 
 async function waitForBothAppsToSettle(
-  appOne: ReturnType<typeof createApplication>,
-  appTwo: ReturnType<typeof createApplication>,
+  appOne: ReturnType<typeof createLiveApplication>,
+  appTwo: ReturnType<typeof createLiveApplication>,
   threadTs: string,
 ): Promise<void> {
   await Promise.all([
@@ -484,7 +489,7 @@ async function waitForBothAppsToSettle(
 }
 
 async function waitForThreadExecutionsToSettle(
-  registry: ReturnType<typeof createApplication>['threadExecutionRegistry'],
+  registry: ReturnType<typeof createLiveApplication>['threadExecutionRegistry'],
   threadTs: string,
 ): Promise<void> {
   const deadline = Date.now() + 30_000;

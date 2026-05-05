@@ -4,10 +4,10 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { createApplication } from '~/application.js';
 import { env } from '~/env/server.js';
 import { WorkspaceResolver } from '~/workspace/resolver.js';
 
+import { createLiveApplication } from './live-application.js';
 import type { LiveE2EScenario } from './scenario.js';
 import { runDirectly } from './scenario.js';
 import {
@@ -118,7 +118,7 @@ async function main(): Promise<void> {
     targetRepo,
   };
 
-  const application = createApplication();
+  const application = createLiveApplication();
   let caughtError: unknown;
 
   try {

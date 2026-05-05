@@ -245,6 +245,11 @@ function delay(ms: number): Promise<void> {
 
 export const scenario: LiveE2EScenario = {
   id: 'permission-approval',
+  provider: {
+    kind: 'specific',
+    providerId: 'claude-code',
+    reason: 'Asserts Claude permission bridge UI.',
+  },
   title: 'Permission Approval System',
   description:
     'Verify that when CLAUDE_PERMISSION_MODE is not bypassPermissions, tool usage triggers ' +

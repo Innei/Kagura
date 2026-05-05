@@ -480,6 +480,11 @@ function isDirectExecution(): boolean {
 
 export const scenario: LiveE2EScenario = {
   id: 'workspace-branch-pr-context',
+  provider: {
+    kind: 'specific',
+    providerId: 'codex-cli',
+    reason: 'Requires Codex branch and PR workflow behavior.',
+  },
   title: 'Workspace Branch And PR Context Refresh',
   description:
     'Verify that the first workspace context block updates when the agent changes branches and adds a PR link when the new branch has an open PR.',

@@ -4,9 +4,10 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { createApplication } from '~/application.js';
 import { env } from '~/env/server.js';
 
+import { applyLiveE2EDatabaseMigrations } from './db-migrations.js';
+import { createLiveApplication } from './live-application.js';
 import type { LiveE2EScenario } from './scenario.js';
 import { runDirectly } from './scenario.js';
 import { SlackApiClient, type SlackConversationRepliesResponse } from './slack-api-client.js';
@@ -67,6 +68,8 @@ async function main(): Promise<void> {
     env.A2A_COORDINATOR_DB_PATH,
     `team-${runId.slice(0, 8)}`,
   );
+  const appTwoSessionDbPath = withPathSuffix(env.SESSION_DB_PATH, 'app2');
+  applyLiveE2EDatabaseMigrations(appTwoSessionDbPath);
   const leadApp = resolveLeadApp();
   const lead =
     leadApp === 'app2'
@@ -104,17 +107,17 @@ async function main(): Promise<void> {
     teamMentionId,
   };
 
-  const appOne = createApplication({
+  const appOne = createLiveApplication({
     a2aCoordinatorDbPath: coordinatorDbPath,
     agentTeams,
     instanceLabel: 'bootstrap:app1',
   });
-  const appTwo = createApplication({
+  const appTwo = createLiveApplication({
     a2aCoordinatorDbPath: coordinatorDbPath,
     agentTeams,
     executionProbePath: withPathSuffix(env.SLACK_E2E_EXECUTION_PROBE_PATH, 'app2'),
     instanceLabel: 'bootstrap:app2',
-    sessionDbPath: withPathSuffix(env.SESSION_DB_PATH, 'app2'),
+    sessionDbPath: appTwoSessionDbPath,
     skipManifestSync: true,
     slackCredentials: {
       appToken: env.SLACK_APP_2_TOKEN,
@@ -320,7 +323,7 @@ function resolveLeadApp(): 'app1' | 'app2' {
 }
 
 async function waitForThreadExecutionsToSettle(
-  registry: ReturnType<typeof createApplication>['threadExecutionRegistry'],
+  registry: ReturnType<typeof createLiveApplication>['threadExecutionRegistry'],
   threadTs: string,
 ): Promise<void> {
   const deadline = Date.now() + 30_000;

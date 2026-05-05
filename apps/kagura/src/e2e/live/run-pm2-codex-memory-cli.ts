@@ -441,6 +441,11 @@ function delay(ms: number): Promise<void> {
 
 export const scenario: LiveE2EScenario = {
   id: 'pm2-codex-memory-cli',
+  provider: {
+    kind: 'specific',
+    providerId: 'codex-cli',
+    reason: 'Starts a PM2 Codex production app.',
+  },
   title: 'PM2 Codex Memory CLI',
   description:
     'Starts the compiled production app under PM2 and verifies Codex can save and recall memory through kagura-memory.',

@@ -429,6 +429,11 @@ function delay(ms: number): Promise<void> {
 
 export const scenario: LiveE2EScenario = {
   id: 'thread-session-resume',
+  provider: {
+    kind: 'specific',
+    providerId: 'claude-code',
+    reason: 'Asserts Claude session id persistence and resume semantics.',
+  },
   title: 'Thread Session Resume',
   description:
     'Starts a long-running thread execution, interrupts it with a second thread message, and asserts the second execution resumes the persisted Claude session instead of creating a fresh one.',

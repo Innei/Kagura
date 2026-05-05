@@ -6,9 +6,9 @@ import path from 'node:path';
 
 import Database from 'better-sqlite3';
 
-import { createApplication } from '~/application.js';
 import { env } from '~/env/server.js';
 
+import { createLiveApplication } from './live-application.js';
 import type { LiveE2EScenario } from './scenario.js';
 import { runDirectly } from './scenario.js';
 import {
@@ -67,7 +67,7 @@ async function main(): Promise<void> {
     runId,
   };
 
-  let application = createApplication();
+  let application = createLiveApplication();
   let caughtError: unknown;
 
   try {
@@ -88,7 +88,7 @@ async function main(): Promise<void> {
     console.info('Phase 1 passed — global memory saved without workspace.');
 
     await application.stop();
-    application = createApplication();
+    application = createLiveApplication();
     await application.start();
     await delay(3_000);
 

@@ -237,6 +237,11 @@ function delay(ms: number): Promise<void> {
 
 export const scenario: LiveE2EScenario = {
   id: 'host-execution-recovery',
+  provider: {
+    kind: 'specific',
+    providerId: 'codex-cli',
+    reason: 'Seeds a Codex execution record and verifies host recovery.',
+  },
   title: 'Host Execution Recovery',
   description:
     'Seed an interrupted execution before Socket Mode startup and verify Kagura resumes it automatically.',

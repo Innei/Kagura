@@ -278,6 +278,11 @@ function delay(ms: number): Promise<void> {
 
 export const scenario: LiveE2EScenario = {
   id: 'codex-memory-activity',
+  provider: {
+    kind: 'specific',
+    providerId: 'codex-cli',
+    reason: 'Asserts Codex-specific memory activity rendering.',
+  },
   title: 'Codex Memory Activity Rendering',
   description:
     'Verify Codex save_memory file writes render as a concise memory activity without exposing the raw shell command in Slack.',

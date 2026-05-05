@@ -6,6 +6,7 @@ import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 
 import { filterScenarios, formatScenarioList, parseArgs, resolveByIds } from './cli-utils.js';
+import { resolveLiveProviderOverride } from './live-application.js';
 import type { LiveE2EScenario } from './scenario.js';
 
 // ---------------------------------------------------------------------------
@@ -189,6 +190,24 @@ async function main(): Promise<void> {
     console.info(`Running all ${selected.length} live E2E scenario(s).\n`);
   }
 
+  const providerFilter = resolveLiveProviderOverride();
+  if (providerFilter) {
+    const skipped = selected.filter((scenario) => !isProviderCompatible(scenario, providerFilter));
+    selected = selected.filter((scenario) => isProviderCompatible(scenario, providerFilter));
+    if (skipped.length > 0) {
+      console.info(
+        `Skipping ${skipped.length} provider-specific scenario(s) incompatible with ${providerFilter}: ${skipped
+          .map((scenario) => scenario.id)
+          .join(', ')}`,
+      );
+    }
+    if (selected.length === 0) {
+      console.error(`No scenarios are compatible with SLACK_E2E_PROVIDER_ID=${providerFilter}.`);
+      process.exitCode = 1;
+      return;
+    }
+  }
+
   const results = await runScenarios(selected);
   printSummary(results);
 
@@ -199,3 +218,10 @@ async function main(): Promise<void> {
 }
 
 await main();
+
+function isProviderCompatible(scenario: LiveE2EScenario, providerId: string): boolean {
+  if (!scenario.provider || scenario.provider.kind === 'generic') {
+    return true;
+  }
+  return scenario.provider.providerId === providerId;
+}

@@ -295,6 +295,11 @@ function delay(ms: number): Promise<void> {
 
 export const scenario: LiveE2EScenario = {
   id: 'host-memory-ingestion',
+  provider: {
+    kind: 'specific',
+    providerId: 'codex-cli',
+    reason: 'Uses Codex to produce the final reply for host memory ingestion.',
+  },
   title: 'Host Memory Ingestion',
   description:
     'Verify a completed final assistant reply is extracted into memory by the host-side ingestion service and audited.',

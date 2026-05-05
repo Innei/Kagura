@@ -383,6 +383,11 @@ function delay(ms: number): Promise<void> {
 
 export const scenario: LiveE2EScenario = {
   id: 'codex-channel-default-workspace',
+  provider: {
+    kind: 'specific',
+    providerId: 'codex-cli',
+    reason: 'Exercises Codex channel preference persistence through Codex tools.',
+  },
   title: 'Codex Channel Default Workspace',
   description:
     'Verify Codex can persist a channel default workspace and a later new thread without an explicit repo uses that workspace.',

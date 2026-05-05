@@ -4,10 +4,10 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { createApplication } from '~/application.js';
 import { env } from '~/env/server.js';
 import { decodeWorkspacePickerButtonValue } from '~/slack/interactions/workspace-picker-payload.js';
 
+import { createLiveApplication } from './live-application.js';
 import type { LiveE2EScenario } from './scenario.js';
 import { runDirectly } from './scenario.js';
 import { SlackApiClient, type SlackConversationRepliesResponse } from './slack-api-client.js';
@@ -70,7 +70,7 @@ async function main(): Promise<void> {
   await fs.mkdir(path.join(tempRepo1, '.git'), { recursive: true });
   await fs.mkdir(path.join(tempRepo2, '.git'), { recursive: true });
 
-  const application = createApplication();
+  const application = createLiveApplication();
   let caughtError: unknown;
 
   try {

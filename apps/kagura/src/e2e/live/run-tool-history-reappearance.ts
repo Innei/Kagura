@@ -4,11 +4,11 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { createApplication } from '~/application.js';
 import { env } from '~/env/server.js';
 import type { SlackStatusProbeRecord } from '~/slack/render/status-probe.js';
 
 import { readSlackStatusProbeFile, resetSlackStatusProbeFile } from './file-slack-status-probe.js';
+import { createLiveApplication } from './live-application.js';
 import type { LiveE2EScenario } from './scenario.js';
 import { runDirectly } from './scenario.js';
 import { SlackApiClient } from './slack-api-client.js';
@@ -69,7 +69,7 @@ async function main(): Promise<void> {
     targetRepo,
   };
 
-  const application = createApplication();
+  const application = createLiveApplication();
   let caughtError: unknown;
 
   try {

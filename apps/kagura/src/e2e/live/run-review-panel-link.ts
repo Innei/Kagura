@@ -265,6 +265,11 @@ function delay(ms: number): Promise<void> {
 
 export const scenario: LiveE2EScenario = {
   id: 'review-panel-link',
+  provider: {
+    kind: 'specific',
+    providerId: 'codex-cli',
+    reason: 'Requires Codex workspace-bound code review output.',
+  },
   title: 'Review Panel Link',
   description: 'Verifies Slack posts a review panel link and the public panel/API are reachable.',
   keywords: ['review', 'panel', 'webui', 'cloudflare', 'argo'],

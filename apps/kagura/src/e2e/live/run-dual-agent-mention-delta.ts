@@ -4,9 +4,10 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { createApplication } from '~/application.js';
 import { env } from '~/env/server.js';
 
+import { applyLiveE2EDatabaseMigrations } from './db-migrations.js';
+import { createLiveApplication } from './live-application.js';
 import type { LiveE2EScenario } from './scenario.js';
 import { runDirectly } from './scenario.js';
 import { SlackApiClient, type SlackConversationRepliesResponse } from './slack-api-client.js';
@@ -70,6 +71,8 @@ async function main(): Promise<void> {
   const appTwoClient = new SlackApiClient(env.SLACK_BOT_2_TOKEN);
   const appOneIdentity = await appOneClient.authTest();
   const appTwoIdentity = await appTwoClient.authTest();
+  const appTwoSessionDbPath = withPathSuffix(env.SESSION_DB_PATH, 'app2');
+  applyLiveE2EDatabaseMigrations(appTwoSessionDbPath);
 
   const result: DualAgentMentionDeltaResult = {
     appOneBotUserId: appOneIdentity.user_id,
@@ -90,11 +93,11 @@ async function main(): Promise<void> {
     runId,
   };
 
-  const appOne = createApplication({ instanceLabel: 'bootstrap:app1' });
-  const appTwo = createApplication({
+  const appOne = createLiveApplication({ instanceLabel: 'bootstrap:app1' });
+  const appTwo = createLiveApplication({
     executionProbePath: withPathSuffix(env.SLACK_E2E_EXECUTION_PROBE_PATH, 'app2'),
     instanceLabel: 'bootstrap:app2',
-    sessionDbPath: withPathSuffix(env.SESSION_DB_PATH, 'app2'),
+    sessionDbPath: appTwoSessionDbPath,
     skipManifestSync: true,
     slackCredentials: {
       appToken: env.SLACK_APP_2_TOKEN,
