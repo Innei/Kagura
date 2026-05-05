@@ -113,7 +113,7 @@ kagura
 
 `kagura` detects that no configuration exists and launches an interactive wizard:
 
-1. **Select an AI provider** — `claude-code` (Anthropic Claude via [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk-typescript)) or `codex-cli` (OpenAI Codex via the `codex` CLI).
+1. **Select an AI provider** — `claude-code` (Anthropic Claude via [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk-typescript)), `codex-cli` (OpenAI Codex via the `codex` CLI), or `pi-agent` (Pi Agent via `pi -p --mode json` by default).
 2. **Set up your Slack app**
    - **Create a new one** — kagura opens `api.slack.com/apps?new_app=1&manifest_json=…` with the manifest already filled in; click Create → Install. If you have a Slack config token set, it can also call `apps.manifest.create` directly.
    - **Reuse an existing one** — paste the App ID and credentials.

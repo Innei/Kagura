@@ -1,7 +1,7 @@
 import type { EnvPatch } from '../config/env-writer.js';
 import type { ConfigPatch } from '../config/json-writer.js';
 
-export type ProviderId = 'claude-code' | 'codex-cli';
+export type ProviderId = 'claude-code' | 'codex-cli' | 'pi-agent';
 
 export interface DetectResult {
   detail?: string;

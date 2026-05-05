@@ -5,6 +5,7 @@ import { resolveKaguraPaths } from '@kagura/cli/config/paths';
 
 import { ClaudeAgentSdkExecutor } from '~/agent/providers/claude-code/adapter.js';
 import { CodexCliExecutor } from '~/agent/providers/codex-cli/adapter.js';
+import { PiAgentExecutor } from '~/agent/providers/pi-agent/adapter.js';
 import { createProviderRegistry } from '~/agent/registry.js';
 import type { AgentExecutor } from '~/agent/types.js';
 import { SqliteAnalyticsStore } from '~/analytics/sqlite-analytics-store.js';
@@ -53,7 +54,7 @@ export interface RuntimeApplicationOptions {
   a2aOutputMode?: typeof env.A2A_OUTPUT_MODE | undefined;
   agentTeams?: AgentTeamsConfig | undefined;
   claudePermissionMode?: typeof env.CLAUDE_PERMISSION_MODE | undefined;
-  defaultProviderId?: 'claude-code' | 'codex-cli' | undefined;
+  defaultProviderId?: 'claude-code' | 'codex-cli' | 'pi-agent' | undefined;
   executionProbePath?: string | undefined;
   instanceLabel?: string | undefined;
   memoryIngestionLlm?: Pick<OpenAICompatibleClient, 'chat'> | undefined;
@@ -174,11 +175,16 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
     memoryStore,
     channelPreferenceStore,
   );
+  const piAgentExecutor = new PiAgentExecutor(
+    logger.withTag('pi-agent:session'),
+    channelPreferenceStore,
+  );
   const providerRegistry = createProviderRegistry(
     options?.defaultProviderId ?? env.AGENT_DEFAULT_PROVIDER,
     new Map<string, AgentExecutor>([
       ['claude-code', ccExecutor],
       ['codex-cli', codexExecutor],
+      ['pi-agent', piAgentExecutor],
     ]),
   );
 
