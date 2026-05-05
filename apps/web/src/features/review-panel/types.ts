@@ -33,6 +33,9 @@ export interface ReviewTreeResponse {
 }
 
 export interface ReviewFileResponse {
-  content: string;
+  content?: string | undefined;
+  encoding: 'base64' | 'none' | 'text';
+  mediaType: 'binary' | 'image' | 'text';
+  mimeType?: string | undefined;
   path: string;
 }

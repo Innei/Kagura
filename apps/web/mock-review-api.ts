@@ -7,9 +7,16 @@ import { fileURLToPath } from 'node:url';
 import type { Plugin } from 'vite';
 
 const MOCK_EXECUTION_ID = 'mock-review';
+const MOCK_IMAGE_PATH = 'mock-assets/review-image-preview.png';
+const MOCK_BINARY_PATH = 'mock-assets/raw-binary-payload.bin';
+const MOCK_IMAGE_BYTES = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/l4M7ewAAAABJRU5ErkJggg==',
+  'base64',
+);
+const MOCK_BINARY_BYTES = Buffer.from([0x00, 0x11, 0x7F, 0x80, 0xFF, 0x20, 0x00, 0x42]);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '..', '..');
-const DEFAULT_BASE_REF = process.env.KAGURA_WEB_MOCK_BASE_REF ?? 'HEAD~10';
+const DEFAULT_BASE_REF = process.env.KAGURA_WEB_MOCK_BASE_REF ?? 'HEAD';
 
 let resolvedBaseHead: string | undefined;
 let resolvedBaseLabel: string | undefined;
@@ -88,7 +95,19 @@ function listChangedFiles(baseHead: string): ChangedFile[] {
     changed.push({ path: filePath, status: '??', additions: 0, deletions: 0 });
   }
 
+  upsertMockBinaryDemos(changed);
+
   return changed.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+function upsertMockBinaryDemos(changed: ChangedFile[]): void {
+  for (const demo of [
+    { path: MOCK_IMAGE_PATH, status: '??' },
+    { path: MOCK_BINARY_PATH, status: '??' },
+  ]) {
+    if (changed.some((entry) => entry.path === demo.path)) continue;
+    changed.push({ additions: 0, deletions: 0, path: demo.path, status: demo.status });
+  }
 }
 
 function listTree(baseHead: string) {
@@ -115,6 +134,18 @@ function getDiff(baseHead: string, filePath?: string): string {
   const args = ['diff', '--no-ext-diff', '--find-renames', baseHead];
   if (filePath) args.push('--', filePath);
   const tracked = git(args);
+  if (!filePath) {
+    return [
+      tracked,
+      synthesizeMockBinaryDemoDiff(MOCK_IMAGE_PATH),
+      synthesizeMockBinaryDemoDiff(MOCK_BINARY_PATH),
+    ]
+      .filter(Boolean)
+      .join('\n');
+  }
+  if (filePath === MOCK_IMAGE_PATH || filePath === MOCK_BINARY_PATH) {
+    return synthesizeMockBinaryDemoDiff(filePath);
+  }
   if (filePath && !tracked.trim()) {
     // git diff returns empty in two unrelated cases:
     //   1) the file is tracked AND identical to the base — there is no diff to show.
@@ -126,13 +157,21 @@ function getDiff(baseHead: string, filePath?: string): string {
   return tracked;
 }
 
+function synthesizeMockBinaryDemoDiff(filePath: string): string {
+  return `diff --git a/${filePath} b/${filePath}\nnew file mode 100644\nBinary files /dev/null and b/${filePath} differ`;
+}
+
 function synthesizeUntrackedDiff(filePath: string): string {
   try {
     const abs = path.resolve(REPO_ROOT, filePath);
     if (!abs.startsWith(REPO_ROOT + path.sep)) return '';
-    const buffer = readFileSync(abs, 'utf8');
-    if (!buffer) return '';
-    const lines = buffer.split('\n');
+    const buffer = readFileSync(abs);
+    if (isBinaryBuffer(buffer)) {
+      return `diff --git a/${filePath} b/${filePath}\nnew file mode 100644\nBinary files /dev/null and b/${filePath} differ`;
+    }
+    const content = buffer.toString('utf8');
+    if (!content) return '';
+    const lines = content.split('\n');
     if (lines.at(-1) === '') lines.pop();
     return [
       `diff --git a/${filePath} b/${filePath}`,
@@ -152,32 +191,103 @@ async function getFile(
   baseHead: string,
   filePath: string,
   ref: 'base' | 'head',
-): Promise<{ content: string; path: string } | undefined> {
+): Promise<
+  | {
+      content?: string | undefined;
+      encoding: 'base64' | 'none' | 'text';
+      mediaType: 'binary' | 'image' | 'text';
+      mimeType?: string | undefined;
+      path: string;
+    }
+  | undefined
+> {
   if (!filePath) return undefined;
   const safePath = path.posix.normalize(filePath.replaceAll(path.sep, '/'));
   if (safePath.startsWith('../') || safePath === '.' || path.isAbsolute(filePath)) {
     return undefined;
   }
   if (ref === 'base') {
+    if (safePath === MOCK_IMAGE_PATH || safePath === MOCK_BINARY_PATH) {
+      return undefined;
+    }
     try {
       const content = execFileSync('git', ['-C', REPO_ROOT, 'show', `${baseHead}:${safePath}`], {
-        encoding: 'utf8',
         maxBuffer: 64 * 1024 * 1024,
         stdio: ['ignore', 'pipe', 'ignore'],
       });
-      return { content, path: safePath };
+      return formatFilePayload(safePath, content);
     } catch {
       return undefined;
     }
   }
   const abs = path.resolve(REPO_ROOT, safePath);
   if (!abs.startsWith(REPO_ROOT + path.sep)) return undefined;
+  if (safePath === MOCK_IMAGE_PATH) {
+    return formatFilePayload(safePath, MOCK_IMAGE_BYTES);
+  }
+  if (safePath === MOCK_BINARY_PATH) {
+    return formatFilePayload(safePath, MOCK_BINARY_BYTES);
+  }
   try {
-    const content = await fs.readFile(abs, 'utf8');
-    return { content, path: safePath };
+    const content = await fs.readFile(abs);
+    return formatFilePayload(safePath, content);
   } catch {
     return undefined;
   }
+}
+
+function formatFilePayload(
+  filePath: string,
+  buffer: Buffer,
+): {
+  content?: string | undefined;
+  encoding: 'base64' | 'none' | 'text';
+  mediaType: 'binary' | 'image' | 'text';
+  mimeType?: string | undefined;
+  path: string;
+} {
+  const mimeType = imageMimeType(filePath);
+  if (mimeType) {
+    return {
+      content: buffer.toString('base64'),
+      encoding: 'base64',
+      mediaType: 'image',
+      mimeType,
+      path: filePath,
+    };
+  }
+  if (isBinaryBuffer(buffer)) {
+    return { encoding: 'none', mediaType: 'binary', path: filePath };
+  }
+  return { content: buffer.toString('utf8'), encoding: 'text', mediaType: 'text', path: filePath };
+}
+
+function imageMimeType(filePath: string): string | undefined {
+  switch (path.extname(filePath).toLowerCase()) {
+    case '.gif': {
+      return 'image/gif';
+    }
+    case '.jpg':
+    case '.jpeg': {
+      return 'image/jpeg';
+    }
+    case '.png': {
+      return 'image/png';
+    }
+    case '.webp': {
+      return 'image/webp';
+    }
+    default: {
+      return undefined;
+    }
+  }
+}
+
+function isBinaryBuffer(buffer: Buffer): boolean {
+  if (buffer.length === 0) return false;
+  const sample = buffer.subarray(0, Math.min(buffer.length, 8000));
+  if (sample.includes(0)) return true;
+  return sample.toString('utf8').includes('\uFFFD');
 }
 
 export function createMockReviewApiPlugin(): Plugin {

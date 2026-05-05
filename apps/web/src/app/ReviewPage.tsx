@@ -8,7 +8,11 @@ import {
 } from '../features/review-panel/api/review-api';
 import { ReviewLayout } from '../features/review-panel/components/ReviewLayout';
 import { ShellState } from '../features/review-panel/components/ShellState';
-import type { ReviewSession, ReviewTreeEntry } from '../features/review-panel/types';
+import type {
+  ReviewFileResponse,
+  ReviewSession,
+  ReviewTreeEntry,
+} from '../features/review-panel/types';
 
 interface ReviewPageProps {
   apiBasePath: string;
@@ -35,9 +39,9 @@ export function ReviewPage({ apiBasePath, executionId }: ReviewPageProps) {
   const [error, setError] = useState<string | undefined>();
   const [treeEntries, setTreeEntries] = useState<ReviewTreeEntry[] | undefined>();
   const [treeLoading, setTreeLoading] = useState(false);
-  const [content, setContent] = useState<string | undefined>(undefined);
+  const [file, setFile] = useState<ReviewFileResponse | undefined>(undefined);
   const [contentLoading, setContentLoading] = useState(false);
-  const [baseContent, setBaseContent] = useState<string | undefined>(undefined);
+  const [baseFile, setBaseFile] = useState<ReviewFileResponse | undefined>(undefined);
   const initialView = readViewFromUrl();
 
   useEffect(() => {
@@ -69,10 +73,12 @@ export function ReviewPage({ apiBasePath, executionId }: ReviewPageProps) {
   useEffect(() => {
     if (loading || error) return;
     if (!selectedPath) {
-      setContent(undefined);
-      setBaseContent(undefined);
+      setFile(undefined);
+      setBaseFile(undefined);
       return;
     }
+    setFile(undefined);
+    setBaseFile(undefined);
     setContentLoading(true);
     let cancelled = false;
     void Promise.all([
@@ -81,14 +87,14 @@ export function ReviewPage({ apiBasePath, executionId }: ReviewPageProps) {
     ])
       .then(([head, base]) => {
         if (cancelled) return;
-        setContent(head);
-        setBaseContent(base);
+        setFile(head);
+        setBaseFile(base);
         setContentLoading(false);
       })
       .catch(() => {
         if (cancelled) return;
-        setContent(undefined);
-        setBaseContent(undefined);
+        setFile(undefined);
+        setBaseFile(undefined);
         setContentLoading(false);
       });
     return () => {
@@ -120,10 +126,10 @@ export function ReviewPage({ apiBasePath, executionId }: ReviewPageProps) {
 
   return (
     <ReviewLayout
-      baseContent={baseContent}
-      content={content}
+      baseFile={baseFile}
       contentLoading={contentLoading}
       diff={diff}
+      file={file}
       initialViewMode={initialView}
       selectedPath={selectedPath}
       session={session}

@@ -85,6 +85,32 @@ export const empty = css`
   text-align: center;
 `;
 
+export const mediaRoot = css`
+  align-items: center;
+  display: flex;
+  height: 100%;
+  justify-content: center;
+  padding: token(spacing.6);
+`;
+
+export const imagePreview = css`
+  background:
+    linear-gradient(45deg, token(colors.border.default) 25%, transparent 25%),
+    linear-gradient(-45deg, token(colors.border.default) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, token(colors.border.default) 75%),
+    linear-gradient(-45deg, transparent 75%, token(colors.border.default) 75%);
+  background-position:
+    0 0,
+    0 8px,
+    8px -8px,
+    -8px 0;
+  background-size: 16px 16px;
+  border: 1px solid token(colors.border.default);
+  max-height: 100%;
+  max-width: 100%;
+  object-fit: contain;
+`;
+
 export const shiki = css`
   & .shiki span {
     color: inherit;

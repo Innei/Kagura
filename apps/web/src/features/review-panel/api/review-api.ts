@@ -41,7 +41,7 @@ export async function loadFile(
   filePath: string,
   apiBasePath = '',
   ref: 'base' | 'head' = 'head',
-): Promise<string | undefined> {
+): Promise<ReviewFileResponse | undefined> {
   const refSuffix = ref === 'base' ? '&ref=base' : '';
   try {
     const payload = await getJson<ReviewFileResponse>(
@@ -50,7 +50,7 @@ export async function loadFile(
         `/api/reviews/${encodeURIComponent(reviewExecutionId)}/file?path=${encodeURIComponent(filePath)}${refSuffix}`,
       ),
     );
-    return payload.content;
+    return payload;
   } catch {
     return undefined;
   }

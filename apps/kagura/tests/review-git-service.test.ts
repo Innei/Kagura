@@ -168,13 +168,62 @@ describe('GitReviewService', () => {
     const service = new GitReviewService(store);
 
     const head = await service.getFile('exec-2', 'src/index.ts', 'head');
+    expect(head).toMatchObject({ encoding: 'text', mediaType: 'text', path: 'src/index.ts' });
     expect(head?.content).toBe('export const value = 2;\n');
 
     const base = await service.getFile('exec-2', 'src/index.ts', 'base');
+    expect(base).toMatchObject({ encoding: 'text', mediaType: 'text', path: 'src/index.ts' });
     expect(base?.content).toBe('export const value = 1;\n');
 
     const missingBase = await service.getFile('exec-2', 'src/new-untracked.ts', 'base');
     expect(missingBase).toBeUndefined();
+
+    sqlite.close();
+  });
+
+  it('returns renderable images as base64 and suppresses generic binary content', async () => {
+    const workspacePath = createGitFixture();
+    const baseHead = resolveGitHead(workspacePath);
+    expect(baseHead).toBeTruthy();
+
+    fs.writeFileSync(
+      path.join(workspacePath, 'src/image.png'),
+      Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex'),
+    );
+    fs.writeFileSync(path.join(workspacePath, 'src/blob.bin'), Buffer.from([0, 1, 2, 3, 4]));
+
+    const { db, sqlite } = createTestDatabase();
+    const store = new SqliteReviewSessionStore(db);
+    store.start({
+      baseBranch: 'main',
+      baseHead,
+      channelId: 'C1',
+      createdAt: new Date().toISOString(),
+      executionId: 'exec-binary',
+      threadTs: '123.456',
+      workspaceLabel: 'fixture',
+      workspacePath,
+      workspaceRepoId: 'fixture',
+    });
+    const service = new GitReviewService(store);
+
+    expect(service.getSession('exec-binary')?.changedFiles).toEqual([
+      { path: 'src/blob.bin', status: '??', additions: 0, deletions: 0 },
+      { path: 'src/image.png', status: '??', additions: 0, deletions: 0 },
+    ]);
+
+    const fullDiff = service.getDiff('exec-binary') ?? '';
+    expect(fullDiff).toContain('Binary files /dev/null and b/src/image.png differ');
+    expect(fullDiff).toContain('Binary files /dev/null and b/src/blob.bin differ');
+
+    await expect(service.getFile('exec-binary', 'src/image.png', 'head')).resolves.toMatchObject({
+      encoding: 'base64',
+      mediaType: 'image',
+      mimeType: 'image/png',
+      path: 'src/image.png',
+    });
+    const binary = await service.getFile('exec-binary', 'src/blob.bin', 'head');
+    expect(binary).toEqual({ encoding: 'none', mediaType: 'binary', path: 'src/blob.bin' });
 
     sqlite.close();
   });

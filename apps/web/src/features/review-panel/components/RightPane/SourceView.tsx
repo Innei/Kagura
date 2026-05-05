@@ -1,13 +1,14 @@
 import type { ReactElement } from 'react';
 import { useMemo } from 'react';
 
+import type { ReviewFileResponse } from '../../types';
 import * as styles from './SourceView.styles';
 import { extractShikiLines, useShikiHtml } from './use-shiki-html';
 
 interface SourceViewProps {
   colorScheme: 'dark' | 'light';
-  content?: string | undefined;
   diff: string;
+  file?: ReviewFileResponse | undefined;
   loading: boolean;
   path?: string | undefined;
 }
@@ -51,7 +52,8 @@ function computeAddedLines(diff: string): Set<number> {
   return added;
 }
 
-export function SourceView({ colorScheme, content, diff, loading, path }: SourceViewProps) {
+export function SourceView({ colorScheme, diff, file, loading, path }: SourceViewProps) {
+  const content = file?.mediaType === 'text' ? file.content : undefined;
   const added = useMemo(() => computeAddedLines(diff), [diff]);
   const html = useShikiHtml(content, path, colorScheme);
   const highlightedLines = useMemo(() => (html ? extractShikiLines(html) : undefined), [html]);
@@ -61,6 +63,20 @@ export function SourceView({ colorScheme, content, diff, loading, path }: Source
   }
   if (loading && content === undefined) {
     return <div className={styles.empty}>Loading…</div>;
+  }
+  if (file?.mediaType === 'image' && file.content && file.mimeType) {
+    return (
+      <div className={styles.mediaRoot}>
+        <img
+          alt={path ?? 'Review image'}
+          className={styles.imagePreview}
+          src={`data:${file.mimeType};base64,${file.content}`}
+        />
+      </div>
+    );
+  }
+  if (file?.mediaType === 'binary') {
+    return <div className={styles.empty}>Binary file preview is not available.</div>;
   }
   if (content === undefined) {
     return <div className={styles.empty}>Source view is not available for this file.</div>;

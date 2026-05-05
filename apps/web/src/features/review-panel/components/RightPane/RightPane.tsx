@@ -1,4 +1,4 @@
-import type { ReviewChangedFile } from '../../types';
+import type { ReviewChangedFile, ReviewFileResponse } from '../../types';
 import type { DiffStyle, ViewMode } from './DiffToolbar';
 import { DiffToolbar } from './DiffToolbar';
 import { DiffView } from './DiffView';
@@ -6,13 +6,13 @@ import * as styles from './RightPane.styles';
 import { SourceView } from './SourceView';
 
 interface RightPaneProps {
-  baseContent?: string | undefined;
+  baseFile?: ReviewFileResponse | undefined;
   colorScheme: 'dark' | 'light';
   compactBreadcrumb?: boolean | undefined;
-  content?: string | undefined;
   contentLoading: boolean;
   diff: string;
   diffStyle: DiffStyle;
+  file?: ReviewFileResponse | undefined;
   hideStylePill?: boolean | undefined;
   hideViewModePill?: boolean | undefined;
   onChangeDiffStyle: (next: DiffStyle) => void;
@@ -28,13 +28,13 @@ interface RightPaneProps {
 }
 
 export function RightPane({
-  baseContent,
+  baseFile,
   colorScheme,
   compactBreadcrumb,
-  content,
   contentLoading,
   diff,
   diffStyle,
+  file,
   hideStylePill,
   hideViewModePill,
   onChangeDiffStyle,
@@ -48,8 +48,12 @@ export function RightPane({
   selectedPath,
   viewMode,
 }: RightPaneProps) {
-  const hasDiff = diff.trim().length > 0 && !/^Binary files /m.test(diff);
-  const sourceAvailable = Boolean(selectedPath) && (content !== undefined || hasDiff);
+  const hasDiff =
+    diff.trim().length > 0 && (diff.includes('\n@@ ') || !/^Binary files /m.test(diff));
+  const sourceAvailable =
+    Boolean(selectedPath) && (file !== undefined || hasDiff || contentLoading);
+  const textContent = file?.mediaType === 'text' ? file.content : undefined;
+  const baseContent = baseFile?.mediaType === 'text' ? baseFile.content : undefined;
   // Diff mode requires actual diff content. Otherwise fall back to source.
   const effectiveMode: ViewMode = viewMode === 'diff' && !hasDiff ? 'source' : viewMode;
   const finalMode: ViewMode =
@@ -78,8 +82,8 @@ export function RightPane({
         {finalMode === 'source' ? (
           <SourceView
             colorScheme={colorScheme}
-            content={content}
             diff={diff}
+            file={file}
             loading={contentLoading}
             path={selectedPath}
           />
@@ -89,7 +93,7 @@ export function RightPane({
             colorScheme={colorScheme}
             diff={diff}
             diffStyle={diffStyle}
-            headContent={content}
+            headContent={textContent}
             selectedPath={selectedPath}
           />
         )}

@@ -6,7 +6,12 @@ import { useBreakpoint } from '../../../theme/use-breakpoint';
 import { useColorScheme } from '../../../theme/use-color-scheme';
 import { useFileNav } from '../hooks/use-file-nav';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
-import type { ReviewChangedFile, ReviewSession, ReviewTreeEntry } from '../types';
+import type {
+  ReviewChangedFile,
+  ReviewFileResponse,
+  ReviewSession,
+  ReviewTreeEntry,
+} from '../types';
 import { compareTreePaths } from '../utils/compare-paths';
 import { BottomSheetFiles } from './BottomSheetFiles';
 import { DrawerSidebar } from './DrawerSidebar';
@@ -20,10 +25,10 @@ import { StatusBar } from './StatusBar';
 import { TitleBar } from './TitleBar';
 
 interface ReviewLayoutProps {
-  baseContent?: string | undefined;
-  content?: string | undefined;
+  baseFile?: ReviewFileResponse | undefined;
   contentLoading?: boolean;
   diff: string;
+  file?: ReviewFileResponse | undefined;
   initialViewMode?: ViewMode | undefined;
   onRequestTree?: () => void;
   onSelectPath: (path: string | undefined) => void;
@@ -34,10 +39,10 @@ interface ReviewLayoutProps {
 }
 
 export function ReviewLayout({
-  baseContent,
-  content,
+  baseFile,
   contentLoading,
   diff,
+  file,
   initialViewMode,
   onRequestTree,
   onSelectPath,
@@ -231,12 +236,12 @@ export function ReviewLayout({
           <PanelResizeHandle aria-label="Resize sidebar" className={styles.resizeHandle} />
           <Panel minSize={40} order={2}>
             <RightPane
-              baseContent={baseContent}
+              baseFile={baseFile}
               colorScheme={colorScheme}
-              content={content}
               contentLoading={contentLoading ?? false}
               diff={diff}
               diffStyle={diffStyle}
+              file={file}
               selectedFile={selectedFile}
               selectedPath={selectedPath}
               viewMode={viewMode}
@@ -251,13 +256,13 @@ export function ReviewLayout({
       ) : (
         <div className={styles.flatBody}>
           <RightPane
-            baseContent={baseContent}
+            baseFile={baseFile}
             colorScheme={colorScheme}
             compactBreadcrumb={isMobile}
-            content={content}
             contentLoading={contentLoading ?? false}
             diff={diff}
             diffStyle={effectiveDiffStyle}
+            file={file}
             hideStylePill={isMobile}
             hideViewModePill={isMobile}
             selectedFile={selectedFile}

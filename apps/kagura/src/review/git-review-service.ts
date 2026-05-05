@@ -97,7 +97,16 @@ export class GitReviewService {
     executionId: string,
     filePath: string,
     ref: 'base' | 'head' = 'head',
-  ): Promise<{ content: string; path: string } | undefined> {
+  ): Promise<
+    | {
+        content?: string | undefined;
+        encoding: 'base64' | 'none' | 'text';
+        mediaType: 'binary' | 'image' | 'text';
+        mimeType?: string | undefined;
+        path: string;
+      }
+    | undefined
+  > {
     const session = this.store.get(executionId);
     if (!session) return undefined;
 
@@ -105,34 +114,35 @@ export class GitReviewService {
 
     if (ref === 'base') {
       const base = session.baseHead ?? 'HEAD';
-      const blob = readGitBlob(session.workspacePath, base, relativePath);
+      const blob = readGitBlobBuffer(session.workspacePath, base, relativePath);
       if (blob === undefined) return undefined;
-      return { content: blob, path: relativePath };
+      return formatFilePayload(relativePath, blob);
     }
 
     if (session.diffSnapshot !== undefined && session.status !== 'running') {
       if (!session.head || session.head === session.baseHead) return undefined;
-      const blob = readGitBlob(session.workspacePath, session.head, relativePath);
+      const blob = readGitBlobBuffer(session.workspacePath, session.head, relativePath);
       if (blob === undefined) return undefined;
-      return { content: blob, path: relativePath };
+      return formatFilePayload(relativePath, blob);
     }
 
     const absolutePath = path.resolve(session.workspacePath, relativePath);
     const realWorkspace = await fs.realpath(session.workspacePath);
     const realTarget = await fs.realpath(absolutePath).catch(() => undefined);
     if (!realTarget || !isInside(realWorkspace, realTarget)) {
-      return { content: '', path: relativePath };
+      return { content: '', encoding: 'text', mediaType: 'text', path: relativePath };
     }
 
     const stat = await fs.stat(realTarget);
     if (!stat.isFile()) {
-      return { content: '', path: relativePath };
+      return { content: '', encoding: 'text', mediaType: 'text', path: relativePath };
     }
 
-    const content = await fs
-      .readFile(realTarget, 'utf8')
-      .catch(() => '[binary or unreadable file]');
-    return { content, path: relativePath };
+    const content = await fs.readFile(realTarget).catch(() => undefined);
+    if (content === undefined) {
+      return { encoding: 'none', mediaType: 'binary', path: relativePath };
+    }
+    return formatFilePayload(relativePath, content);
   }
 }
 
@@ -272,7 +282,9 @@ function countUntrackedAdditions(workspacePath: string, filePath: string): numbe
   try {
     const absolutePath = path.resolve(workspacePath, filePath);
     if (!fsSync.statSync(absolutePath).isFile()) return 0;
-    const content = fsSync.readFileSync(absolutePath, 'utf8');
+    const buffer = fsSync.readFileSync(absolutePath);
+    if (isBinaryBuffer(buffer)) return 0;
+    const content = buffer.toString('utf8');
     if (!content) return 0;
     const lines = content.split('\n');
     if (lines.at(-1) === '') lines.pop();
@@ -306,7 +318,11 @@ function renderUntrackedFileDiff(workspacePath: string, filePath: string): strin
   let content: string;
   try {
     if (!fsSync.statSync(absolutePath).isFile()) return '';
-    content = fsSync.readFileSync(absolutePath, 'utf8');
+    const buffer = fsSync.readFileSync(absolutePath);
+    if (isBinaryBuffer(buffer)) {
+      return `diff --git a/${filePath} b/${filePath}\nnew file mode 100644\nBinary files /dev/null and b/${filePath} differ`;
+    }
+    content = buffer.toString('utf8');
   } catch {
     return `diff --git a/${filePath} b/${filePath}\nnew file mode 100644\nBinary files /dev/null and b/${filePath} differ`;
   }
@@ -336,17 +352,70 @@ function runGit(cwd: string, args: string[]): string {
   }
 }
 
-function readGitBlob(cwd: string, ref: string, filePath: string): string | undefined {
+function readGitBlobBuffer(cwd: string, ref: string, filePath: string): Buffer | undefined {
   try {
     return execFileSync('git', ['-C', cwd, 'show', `${ref}:${filePath}`], {
-      encoding: 'utf8',
       maxBuffer: 20 * 1024 * 1024,
-      timeout: 10_000,
       stdio: ['ignore', 'pipe', 'ignore'],
     });
   } catch {
     return undefined;
   }
+}
+
+function formatFilePayload(
+  filePath: string,
+  buffer: Buffer,
+): {
+  content?: string | undefined;
+  encoding: 'base64' | 'none' | 'text';
+  mediaType: 'binary' | 'image' | 'text';
+  mimeType?: string | undefined;
+  path: string;
+} {
+  const mimeType = imageMimeType(filePath);
+  if (mimeType) {
+    return {
+      content: buffer.toString('base64'),
+      encoding: 'base64',
+      mediaType: 'image',
+      mimeType,
+      path: filePath,
+    };
+  }
+  if (isBinaryBuffer(buffer)) {
+    return { encoding: 'none', mediaType: 'binary', path: filePath };
+  }
+  return { content: buffer.toString('utf8'), encoding: 'text', mediaType: 'text', path: filePath };
+}
+
+function imageMimeType(filePath: string): string | undefined {
+  switch (path.extname(filePath).toLowerCase()) {
+    case '.gif': {
+      return 'image/gif';
+    }
+    case '.jpg':
+    case '.jpeg': {
+      return 'image/jpeg';
+    }
+    case '.png': {
+      return 'image/png';
+    }
+    case '.webp': {
+      return 'image/webp';
+    }
+    default: {
+      return undefined;
+    }
+  }
+}
+
+function isBinaryBuffer(buffer: Buffer): boolean {
+  if (buffer.length === 0) return false;
+  const sample = buffer.subarray(0, Math.min(buffer.length, 8000));
+  if (sample.includes(0)) return true;
+  const decoded = sample.toString('utf8');
+  return decoded.includes('\uFFFD');
 }
 
 function validateRelativeFilePath(filePath: string): string {
