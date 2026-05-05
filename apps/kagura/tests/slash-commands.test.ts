@@ -1,8 +1,9 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AppLogger } from '~/logger/index.js';
 import type { MemoryRecord, MemoryStore } from '~/memory/types.js';
@@ -17,6 +18,10 @@ import { handleWorkspaceCommand } from '~/slack/commands/workspace-command.js';
 import type { ThreadExecutionRegistry } from '~/slack/execution/thread-execution-registry.js';
 import { WorkspaceResolver } from '~/workspace/resolver.js';
 
+vi.mock('node:child_process', () => ({
+  execFileSync: vi.fn(),
+}));
+
 function createTestLogger(): AppLogger {
   const logger = {
     debug: vi.fn(),
@@ -30,6 +35,10 @@ function createTestLogger(): AppLogger {
   logger.withTag.mockReturnValue(logger);
   return logger as unknown as AppLogger;
 }
+
+beforeEach(() => {
+  vi.mocked(execFileSync).mockReset();
+});
 
 function createMemorySessionStore(initial: SessionRecord[] = []): SessionStore {
   const records = new Map<string, SessionRecord>();
@@ -305,7 +314,14 @@ describe('handleWorkspaceCommand', () => {
 });
 
 describe('handleModelCommand', () => {
-  it('lists provider model defaults and current thread override', () => {
+  it('lists current pi-agent provider models and current thread override', () => {
+    vi.mocked(execFileSync).mockReturnValue(
+      [
+        'provider  model      context  max-out  thinking  images',
+        'zai       glm-5.1    200K     131.1K   yes       no',
+        'openai    gpt-5.5    200K     64K      yes       yes',
+      ].join('\n'),
+    );
     const deps = createTestDeps({
       sessionRecords: [
         makeSession('ts-model', {
@@ -318,9 +334,41 @@ describe('handleModelCommand', () => {
     const result = handleModelCommand('list', { ...deps, threadTs: 'ts-model' });
 
     expect(result.response_type).toBe('ephemeral');
-    expect(result.text).toContain('Configured Model Defaults');
-    expect(result.text).toContain('`pi-agent`');
+    expect(result.text).toContain('Available Models for `pi-agent`');
     expect(result.text).toContain('`zai/glm-5.1`');
+    expect(result.text).toContain('`openai/gpt-5.5`');
+    expect(execFileSync).toHaveBeenCalledWith(
+      expect.any(String),
+      ['--list-models'],
+      expect.any(Object),
+    );
+  });
+
+  it('lists current codex provider models from the local catalog', () => {
+    vi.mocked(execFileSync).mockReturnValue(
+      JSON.stringify({
+        models: [
+          { slug: 'gpt-5.5', visibility: 'list' },
+          { slug: 'gpt-5.4-mini', visibility: 'list' },
+          { slug: 'hidden-model', visibility: 'hidden' },
+        ],
+      }),
+    );
+    const deps = createTestDeps({
+      sessionRecords: [
+        makeSession('ts-model', {
+          agentProvider: 'codex-cli',
+        }),
+      ],
+    });
+
+    const result = handleModelCommand('list', { ...deps, threadTs: 'ts-model' });
+
+    expect(result.text).toContain('Available Models for `codex-cli`');
+    expect(result.text).toContain('`gpt-5.5`');
+    expect(result.text).toContain('`gpt-5.4-mini`');
+    expect(result.text).not.toContain('hidden-model');
+    expect(execFileSync).toHaveBeenCalledWith('codex', ['debug', 'models'], expect.any(Object));
   });
 
   it('sets a thread model override and resets provider session id', () => {

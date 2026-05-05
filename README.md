@@ -48,7 +48,7 @@ Slack message event / Message Action
 
 **Workspace routing** — Each thread binds to a repo/workdir. Auto-detected from message text, or manually chosen via Message Action.
 
-**Agent control** — Pluggable provider registry, stop via `stop`/`cancel` keyword, :octagonal_sign: reaction, or message shortcut, slash commands for introspection (`/usage`, `/workspace`, `/memory`, `/session`, `/version`, `/provider`).
+**Agent control** — Pluggable provider registry, per-thread model overrides, stop via `stop`/`cancel` keyword, :octagonal_sign: reaction, or message shortcut, slash commands for introspection (`/usage`, `/workspace`, `/memory`, `/session`, `/version`, `/provider`, `/model`).
 
 **Operations** — Auto-provisioned manifest (message events + commands + shortcuts), online-presence heartbeat, Home tab, Zod-validated inputs, secret redaction in logs.
 
@@ -131,6 +131,8 @@ Secrets go in `.env`, tunables go in `config.json`. Precedence: `environment > c
 See [docs/configuration.md](docs/configuration.md) for the full layout, key reference, and `config.json` example.
 
 Git worktrees should be centralized under `REPO_ROOT_DIR/kagura-worktrees` by default; override with `WORKTREE_ROOT_DIR` or `worktreeRootDir` if you want a different parent directory.
+
+Use `/provider` inside a Slack thread to switch the thread's agent provider, and `/model <name>` to override the model for that same thread. `/model list` shows models available to the current provider: Pi uses `pi --list-models`, Codex uses `codex debug models`, and Claude Code shows supported aliases/common IDs plus the configured default.
 
 ## Subcommands
 
