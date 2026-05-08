@@ -94,6 +94,7 @@ export class SlackApiClient {
   }
 
   async postMessage(args: {
+    blocks?: unknown[];
     channel: string;
     text: string;
     thread_ts?: string;
@@ -101,6 +102,15 @@ export class SlackApiClient {
     unfurl_media?: boolean;
   }): Promise<SlackPostedMessageResponse> {
     return this.call<SlackPostedMessageResponse>('chat.postMessage', args, 'POST');
+  }
+
+  async updateMessage(args: {
+    blocks?: unknown[];
+    channel: string;
+    text: string;
+    ts: string;
+  }): Promise<Record<string, never>> {
+    return this.call<Record<string, never>>('chat.update', args, 'POST');
   }
 
   async addReaction(args: {
@@ -208,7 +218,7 @@ export class SlackApiClient {
         continue;
       }
 
-      searchParams.set(key, String(value));
+      searchParams.set(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
     }
 
     const url =

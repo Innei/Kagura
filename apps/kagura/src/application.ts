@@ -35,6 +35,7 @@ import {
 import { SqliteA2ACoordinatorStore } from '~/slack/ingress/a2a-coordinator-store.js';
 import { FileQuietAssistantMessageRecorder } from '~/slack/ingress/a2a-output-diagnostics.js';
 import type { AgentTeamsConfig } from '~/slack/ingress/agent-team-routing.js';
+import type { ConversationDispatchInput } from '~/slack/ingress/conversation-dispatch.js';
 import { SlackPermissionBridge } from '~/slack/interaction/permission-bridge.js';
 import { SlackUserInputBridge } from '~/slack/interaction/user-input-bridge.js';
 import { startSlackAppWithRetry } from '~/slack/network-guard.js';
@@ -42,6 +43,7 @@ import { createReviewPanelServer, type ReviewPanelServer } from '~/web/review-pa
 import { WorkspaceResolver } from '~/workspace/resolver.js';
 
 export interface RuntimeApplication {
+  dispatchThreadConversation: (input: ConversationDispatchInput) => Promise<void>;
   readonly logger: AppLogger;
   start: () => Promise<void>;
   stop: () => Promise<void>;
@@ -228,8 +230,11 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
         reviewService,
       })
     : undefined;
+  let slackAppStarted = false;
+  let reviewPanelStarted = false;
 
   return {
+    dispatchThreadConversation: (input) => slackApp.dispatchThreadConversation(input),
     logger,
     threadExecutionRegistry,
     async start() {
@@ -251,8 +256,14 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
           );
         });
       }
-      await startSlackAppWithRetry(() => slackApp.start(), logger.withTag('slack:socket'));
-      await reviewPanelServer?.start();
+      await startSlackAppWithRetry(async () => {
+        await slackApp.start();
+        slackAppStarted = true;
+      }, logger.withTag('slack:socket'));
+      if (reviewPanelServer) {
+        await reviewPanelServer.start();
+        reviewPanelStarted = true;
+      }
       memoryReconciler.start();
       slackApp.startA2ASummaryPoller?.();
       logger.info('Slack Socket Mode application started.');
@@ -265,8 +276,14 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
     },
     async stop() {
       slackApp.stopA2ASummaryPoller?.();
-      await reviewPanelServer?.stop();
-      await slackApp.stop();
+      if (reviewPanelStarted) {
+        await reviewPanelServer?.stop();
+        reviewPanelStarted = false;
+      }
+      if (slackAppStarted) {
+        await slackApp.stop();
+        slackAppStarted = false;
+      }
       memoryReconciler.stop();
       await providerRegistry.drain();
       a2aCoordinatorStore.close?.();

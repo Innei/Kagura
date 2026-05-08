@@ -22,7 +22,7 @@ import { resolveWorkspaceDisplayMetadata } from '~/workspace/resolver.js';
 
 import type { SlackPermissionBridge } from '../interaction/permission-bridge.js';
 import type { SlackUserInputBridge } from '../interaction/user-input-bridge.js';
-import type { PostedThreadReply, SlackRenderer } from '../render/slack-renderer.js';
+import type { PostedThreadReply, ProgressTask,SlackRenderer  } from '../render/slack-renderer.js';
 import {
   DEFAULT_ASSISTANT_THINKING_STATUS,
   getShuffledThinkingMessages,
@@ -83,6 +83,7 @@ export interface ActivitySink {
 
 const TOOL_VERB_PATTERN =
   /^(Reading|Searching|Finding|Fetching|Calling|Running|Exploring|Recalling|Saving|Checking|Applying|Editing|Generating|Waiting|Using|Writing) (.+?)(?:\.{3})?$/;
+const MAX_PROGRESS_TASKS = 12;
 
 export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
   const {
@@ -115,6 +116,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
   let progressMessageActive = false;
   let terminalPhase: 'completed' | 'failed' | 'stopped' | undefined;
   const toolHistory = new Map<string, number>();
+  const progressTasks = new Map<string, ProgressTask>();
   let previousActivities = new Set<string>();
   let lastStateKey: string | undefined;
   let pendingGeneratedFiles: GeneratedOutputFile[] = [];
@@ -223,6 +225,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     ...(state.activities != null ? { loadingMessages: state.activities } : {}),
     ...(state.composing != null ? { composing: state.composing } : {}),
     ...(toolHistory.size > 0 ? { toolHistory } : {}),
+    ...(progressTasks.size > 0 ? { tasks: [...progressTasks.values()] } : {}),
     clear: state.clear ?? false,
   });
 
@@ -345,19 +348,23 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
       }
     }
     if (progressMessageActive && progressMessageTs) {
-      await renderer
-        .deleteThreadProgressMessage(client, channel, threadTs, progressMessageTs)
-        .catch((error) => {
-          logger.warn(
-            'Failed to delete thread progress message after assistant reply: %s',
-            String(error),
-          );
-        });
+      const shouldRetainTaskProgressMessage = progressTasks.size > 0;
+      if (!shouldRetainTaskProgressMessage) {
+        await renderer
+          .deleteThreadProgressMessage(client, channel, threadTs, progressMessageTs)
+          .catch((error) => {
+            logger.warn(
+              'Failed to delete thread progress message after assistant reply: %s',
+              String(error),
+            );
+          });
+      }
       progressMessageTs = undefined;
       progressMessageActive = false;
     }
     lastStateKey = undefined;
     toolHistory.clear();
+    progressTasks.clear();
     previousActivities = new Set<string>();
     await renderer.clearUiState(client, channel, threadTs).catch((error) => {
       logger.warn('Failed to clear UI state after assistant reply: %s', String(error));
@@ -393,6 +400,29 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     await postAssistantMessage(text);
   };
 
+  const handleTaskUpdate = async (event: ProgressTask): Promise<void> => {
+    progressTasks.set(event.taskId, event);
+    pruneProgressTasks(progressTasks);
+
+    const state: AgentActivityState = {
+      threadTs,
+      status: event.status === 'in_progress' ? event.title : 'Working on your request...',
+      activities: event.output
+        ? [truncateForSlackUi(event.output)]
+        : event.details
+          ? [truncateForSlackUi(event.details)]
+          : [event.title],
+      clear: false,
+    };
+
+    if (!progressMessageActive) {
+      await activateProgressMessage(state);
+      return;
+    }
+
+    await updateInFlightIndicator(state);
+  };
+
   const handleActivityState = async (state: AgentActivityState): Promise<void> => {
     await maybeRefreshWorkspaceContext();
     const nextStateKey = JSON.stringify(state);
@@ -415,6 +445,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
               status: 'Composing response...',
               loadingMessages: ['Composing response...'],
               ...(toolHistory.size > 0 ? { toolHistory } : {}),
+              ...(progressTasks.size > 0 ? { tasks: [...progressTasks.values()] } : {}),
               clear: false,
             },
             progressMessageTs,
@@ -681,7 +712,10 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
         await handleActivityState(event.state);
         return;
       }
-      if (event.type === 'task-update') return;
+      if (event.type === 'task-update') {
+        await handleTaskUpdate(event);
+        return;
+      }
       if (event.type === 'usage-info') {
         sessionUsageInfo = event.usage;
         return;
@@ -902,4 +936,14 @@ function collectToolActivity(
   }
 
   return currentActivities;
+}
+
+function pruneProgressTasks(progressTasks: Map<string, ProgressTask>): void {
+  while (progressTasks.size > MAX_PROGRESS_TASKS) {
+    const oldestTaskId = progressTasks.keys().next().value;
+    if (!oldestTaskId) {
+      return;
+    }
+    progressTasks.delete(oldestTaskId);
+  }
 }

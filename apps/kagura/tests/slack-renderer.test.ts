@@ -437,6 +437,76 @@ describe('SlackRenderer.postThreadReply', () => {
   });
 });
 
+describe('SlackRenderer.upsertThreadProgressMessage', () => {
+  it('renders agent tasks as a Slack plan block', async () => {
+    const { client, imagePostCalls } = createClientFixture();
+    const renderer = new SlackRenderer(createTestLogger());
+
+    await renderer.upsertThreadProgressMessage(client, 'C1', 'ts-root', {
+      clear: false,
+      status: 'Running checks...',
+      tasks: [
+        {
+          type: 'task-update',
+          taskId: 'cmd-1',
+          title: 'pnpm test',
+          status: 'in_progress',
+          details: 'Starting test runner',
+        },
+        {
+          type: 'task-update',
+          taskId: 'cmd-2',
+          title: 'Read package.json',
+          status: 'complete',
+          output: 'package metadata loaded',
+        },
+      ],
+      threadTs: 'ts-root',
+    });
+
+    expect(imagePostCalls).toHaveLength(1);
+    expect(imagePostCalls[0]).toMatchObject({
+      channel: 'C1',
+      thread_ts: 'ts-root',
+      text: 'Running checks... — pnpm test',
+    });
+    expect(imagePostCalls[0]!.blocks?.[0]).toMatchObject({
+      type: 'plan',
+      title: 'Running checks...',
+      tasks: [
+        {
+          task_id: 'cmd-1',
+          title: 'pnpm test',
+          status: 'in_progress',
+          details: {
+            type: 'rich_text',
+            elements: [
+              {
+                type: 'rich_text_section',
+                elements: [{ type: 'text', text: 'Starting test runner' }],
+              },
+            ],
+          },
+        },
+        {
+          task_id: 'cmd-2',
+          title: 'Read package.json',
+          status: 'complete',
+          output: {
+            type: 'rich_text',
+            elements: [
+              {
+                type: 'rich_text_section',
+                elements: [{ type: 'text', text: 'package metadata loaded' }],
+              },
+            ],
+          },
+        },
+      ],
+    });
+  });
+});
+
 describe('SlackRenderer.updateThreadReplyWorkspaceContext', () => {
   it('updates the existing workspace context block when branch metadata changes', async () => {
     const { client } = createClientFixture();

@@ -80,10 +80,36 @@ export interface SlackImageBlock {
   type: 'image';
 }
 
+export interface SlackRichTextBlock {
+  block_id?: string;
+  elements: Array<{
+    elements: Array<{ text: string; type: 'text' }>;
+    type: 'rich_text_section';
+  }>;
+  type: 'rich_text';
+}
+
+export interface SlackTaskCardBlock {
+  details?: SlackRichTextBlock;
+  output?: SlackRichTextBlock;
+  status: 'pending' | 'in_progress' | 'complete' | 'error';
+  task_id: string;
+  title: string;
+}
+
+export interface SlackPlanBlock {
+  block_id?: string;
+  tasks?: SlackTaskCardBlock[];
+  title: string;
+  type: 'plan';
+}
+
 export type SlackBlock =
   | SlackActionsBlock
   | SlackContextBlock
   | SlackImageBlock
+  | SlackPlanBlock
+  | SlackRichTextBlock
   | SlackSectionBlock;
 
 export interface SlackFilesUploadV2Response {

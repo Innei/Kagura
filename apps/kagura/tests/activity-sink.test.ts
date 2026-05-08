@@ -356,6 +356,82 @@ describe('createActivitySink', () => {
     expect(sink.toolHistory.get('Reading')).toBe(2);
   });
 
+  it('publishes task updates through the progress message state', async () => {
+    const renderer = createRendererStub();
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    await sink.onEvent({
+      type: 'task-update',
+      taskId: 'cmd-1',
+      title: 'git status',
+      status: 'in_progress',
+      details: 'Checking repository state',
+    });
+
+    expect(renderer.upsertThreadProgressMessage).toHaveBeenCalledWith(
+      expect.anything(),
+      'C123',
+      'ts1',
+      expect.objectContaining({
+        status: 'git status',
+        tasks: [
+          expect.objectContaining({
+            taskId: 'cmd-1',
+            title: 'git status',
+            status: 'in_progress',
+            details: 'Checking repository state',
+          }),
+        ],
+      }),
+      undefined,
+    );
+  });
+
+  it('retains task progress messages when the final assistant reply is posted', async () => {
+    const renderer = createRendererStub();
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    await sink.onEvent({
+      type: 'task-update',
+      taskId: 'cmd-1',
+      title: 'git status',
+      status: 'in_progress',
+      details: 'Checking repository state',
+    });
+    await sink.onEvent({
+      type: 'assistant-message',
+      text: 'REAL_TASK_PLAN_BLOCK_OK summary: commands completed',
+    });
+    await sink.onEvent({ type: 'lifecycle', phase: 'completed' });
+
+    await sink.finalize();
+
+    expect(renderer.postThreadReply).toHaveBeenCalledWith(
+      expect.anything(),
+      'C123',
+      'ts1',
+      'REAL_TASK_PLAN_BLOCK_OK summary: commands completed',
+      expect.any(Object),
+    );
+    expect(renderer.deleteThreadProgressMessage).not.toHaveBeenCalled();
+    expect(renderer.finalizeThreadProgressMessage).not.toHaveBeenCalled();
+    expect(renderer.finalizeThreadProgressMessageStopped).not.toHaveBeenCalled();
+  });
+
   it('does not block execution when progress message updates fail', async () => {
     const renderer = createRendererStub();
     vi.mocked(renderer.upsertThreadProgressMessage).mockRejectedValue(new Error('slack hung'));

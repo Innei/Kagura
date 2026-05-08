@@ -27,6 +27,10 @@ import {
   createAssistantThreadStartedHandler,
   createAssistantUserMessageHandler,
 } from './ingress/assistant-message-handler.js';
+import {
+  type ConversationDispatchInput,
+  dispatchThreadConversation,
+} from './ingress/conversation-dispatch.js';
 import { createHomeTabHandler, HOME_TAB_REFRESH_ACTION_ID } from './ingress/home-tab-handler.js';
 import { createReactionStopHandler } from './ingress/reaction-stop-handler.js';
 import { startA2ASummaryPoller } from './ingress/scenarios/a2a/summary-runner.js';
@@ -84,6 +88,7 @@ export interface SlackAppCredentials {
 }
 
 export type KaguraSlackApp = App & {
+  dispatchThreadConversation: (input: ConversationDispatchInput) => Promise<void>;
   recoverPendingExecutions?: () => Promise<void>;
   startA2ASummaryPoller?: () => void;
   stopA2ASummaryPoller?: () => void;
@@ -205,6 +210,8 @@ export function createSlackApp(
   });
 
   const kaguraApp = app as KaguraSlackApp;
+  kaguraApp.dispatchThreadConversation = (input) =>
+    dispatchThreadConversation(app.client as unknown as SlackWebClientLike, ingressDeps, input);
   kaguraApp.startA2ASummaryPoller = () => {
     stopA2ASummaryPoller ??= startA2ASummaryPoller(
       app.client as unknown as SlackWebClientLike,

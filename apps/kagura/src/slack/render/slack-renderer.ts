@@ -2,7 +2,12 @@ import { readFile } from 'node:fs/promises';
 
 import { markdownToBlocks, splitBlocksWithText } from 'markdown-to-slack-blocks';
 
-import type { GeneratedImageFile, GeneratedOutputFile, SessionUsageInfo } from '~/agent/types.js';
+import type {
+  AgentExecutionEvent,
+  GeneratedImageFile,
+  GeneratedOutputFile,
+  SessionUsageInfo,
+} from '~/agent/types.js';
 import { env } from '~/env/server.js';
 import type { AppLogger } from '~/logger/index.js';
 
@@ -12,7 +17,13 @@ import {
   rotateThinkingStatus,
   THINKING_STATUS_MESSAGES,
 } from '../thinking-messages.js';
-import type { SlackBlock, SlackFilesUploadV2Response, SlackWebClientLike } from '../types.js';
+import type {
+  SlackBlock,
+  SlackFilesUploadV2Response,
+  SlackRichTextBlock,
+  SlackTaskCardBlock,
+  SlackWebClientLike,
+} from '../types.js';
 import type { SlackStatusProbe } from './status-probe.js';
 
 const THINKING_STATUS_ROTATION_INTERVAL_MS = 2500;
@@ -41,9 +52,12 @@ interface RendererUiState {
   composing?: boolean | undefined;
   loadingMessages?: string[] | undefined;
   status?: string | undefined;
+  tasks?: ProgressTask[] | undefined;
   threadTs: string;
   toolHistory?: Map<string, number> | undefined;
 }
+
+export type ProgressTask = Extract<AgentExecutionEvent, { type: 'task-update' }>;
 
 export interface PostedThreadReply {
   blocks?: SlackBlock[];
@@ -663,6 +677,13 @@ export class SlackRenderer {
   }
 
   private buildProgressMessageText(state: RendererUiState): string {
+    if (state.tasks && state.tasks.length > 0) {
+      const inFlight = findLastProgressTask(state.tasks, (task) => task.status === 'in_progress');
+      const latest = inFlight ?? state.tasks.at(-1);
+      const title = latest?.title.trim() || DEFAULT_PROGRESS_STATUS;
+      return `${formatPlanTitle(state)} — ${title}`;
+    }
+
     const status = (state.status ?? '').trim() || DEFAULT_PROGRESS_STATUS;
     const detail = this.collectRecentProgressDetails(state.loadingMessages, 1).at(0);
 
@@ -670,6 +691,16 @@ export class SlackRenderer {
   }
 
   private buildProgressMessageBlocks(state: RendererUiState): SlackBlock[] {
+    if (state.tasks && state.tasks.length > 0) {
+      return [
+        {
+          type: 'plan',
+          title: formatPlanTitle(state),
+          tasks: state.tasks.map(toSlackTaskCard),
+        },
+      ];
+    }
+
     const blocks: SlackBlock[] = [];
 
     const historySummary = formatToolHistorySummary(state.toolHistory);
@@ -837,6 +868,71 @@ function formatDurationSmart(ms: number): string {
     return `${minutes}m ${seconds.toFixed(0)}s`;
   }
   return `${seconds.toFixed(1)}s`;
+}
+
+function formatPlanTitle(state: RendererUiState): string {
+  if (state.composing) {
+    return 'Composing response';
+  }
+  const status = state.status?.trim();
+  if (status && status !== DEFAULT_PROGRESS_STATUS) {
+    return trimForSlackText(status, 150);
+  }
+  return 'Working on your request';
+}
+
+function toSlackTaskCard(task: ProgressTask): SlackTaskCardBlock {
+  const details =
+    task.status === 'in_progress' || task.status === 'pending' ? task.details : undefined;
+  const output =
+    task.output ??
+    (task.status === 'complete' || task.status === 'error' ? task.details : undefined);
+
+  return {
+    task_id: trimForSlackText(task.taskId, 255),
+    title: trimForSlackText(task.title, 150),
+    status: task.status,
+    ...(details ? { details: toSlackRichTextBlock(task.taskId, 'details', details) } : {}),
+    ...(output ? { output: toSlackRichTextBlock(task.taskId, 'output', output) } : {}),
+  };
+}
+
+function findLastProgressTask(
+  tasks: readonly ProgressTask[],
+  predicate: (task: ProgressTask) => boolean,
+): ProgressTask | undefined {
+  for (let index = tasks.length - 1; index >= 0; index--) {
+    const task = tasks[index]!;
+    if (predicate(task)) {
+      return task;
+    }
+  }
+  return undefined;
+}
+
+function toSlackRichTextBlock(_taskId: string, _kind: string, text: string): SlackRichTextBlock {
+  return {
+    type: 'rich_text',
+    elements: [
+      {
+        type: 'rich_text_section',
+        elements: [
+          {
+            type: 'text',
+            text: trimForSlackText(text, 1200),
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function trimForSlackText(value: string, maxLength: number): string {
+  const normalized = value.trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+  return `${normalized.slice(0, Math.max(0, maxLength - 3))}...`;
 }
 
 function formatToolHistorySummary(toolHistory?: Map<string, number>): string | undefined {
