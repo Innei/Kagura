@@ -445,6 +445,7 @@ describe('SlackRenderer.upsertThreadProgressMessage', () => {
     await renderer.upsertThreadProgressMessage(client, 'C1', 'ts-root', {
       clear: false,
       status: 'Running checks...',
+      taskCardBlocksEnabled: true,
       tasks: [
         {
           type: 'task-update',
@@ -504,6 +505,49 @@ describe('SlackRenderer.upsertThreadProgressMessage', () => {
         },
       ],
     });
+  });
+
+  it('renders task progress without Slack task cards when disabled', async () => {
+    const { client, imagePostCalls } = createClientFixture();
+    const renderer = new SlackRenderer(createTestLogger());
+
+    await renderer.upsertThreadProgressMessage(client, 'C1', 'ts-root', {
+      clear: false,
+      status: 'Running checks...',
+      taskCardBlocksEnabled: false,
+      tasks: [
+        {
+          type: 'task-update',
+          taskId: 'cmd-1',
+          title: 'pnpm test',
+          status: 'in_progress',
+          details: 'Starting test runner',
+        },
+      ],
+      loadingMessages: ['Starting test runner'],
+      threadTs: 'ts-root',
+    });
+
+    expect(imagePostCalls).toHaveLength(1);
+    expect(imagePostCalls[0]).toMatchObject({
+      channel: 'C1',
+      thread_ts: 'ts-root',
+      text: 'Running checks... — pnpm test',
+    });
+    const blocks = imagePostCalls[0]!.blocks as Array<{ type?: string }> | undefined;
+    expect(blocks?.some((block) => block.type === 'plan')).toBe(false);
+    expect(blocks).toEqual(
+      expect.arrayContaining([
+        {
+          type: 'context',
+          elements: [{ type: 'mrkdwn', text: 'Running checks...' }],
+        },
+        {
+          type: 'context',
+          elements: [{ type: 'mrkdwn', text: 'Starting test runner' }],
+        },
+      ]),
+    );
   });
 });
 

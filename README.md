@@ -134,6 +134,8 @@ Git worktrees should be centralized under `REPO_ROOT_DIR/kagura-worktrees` by de
 
 Use `/provider` inside a Slack thread to switch the thread's agent provider, and `/model <name>` to override the model for that same thread. `/model list` shows models available to the current provider: Pi uses `pi --list-models`, Codex uses `codex debug models`, and Claude Code shows supported aliases/common IDs plus the configured default.
 
+Long Claude Code threads can accumulate provider-side session history even though Kagura only injects incremental Slack transcript context on resumed turns. Tune `slack.threadHistoryLimit` in `config.json` when needed. If a long thread begins failing repeatedly upstream, `/model reset` clears the provider session handle so the next message starts a fresh provider session.
+
 ## Subcommands
 
 | Command                          | What it does                                                        |

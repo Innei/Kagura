@@ -22,7 +22,7 @@ import { resolveWorkspaceDisplayMetadata } from '~/workspace/resolver.js';
 
 import type { SlackPermissionBridge } from '../interaction/permission-bridge.js';
 import type { SlackUserInputBridge } from '../interaction/user-input-bridge.js';
-import type { PostedThreadReply, ProgressTask,SlackRenderer  } from '../render/slack-renderer.js';
+import type { PostedThreadReply, ProgressTask, SlackRenderer } from '../render/slack-renderer.js';
 import {
   DEFAULT_ASSISTANT_THINKING_STATUS,
   getShuffledThinkingMessages,
@@ -47,6 +47,7 @@ export interface ActivitySinkOptions {
   renderer: SlackRenderer;
   reviewUrl?: string | undefined;
   sessionStore: SessionStore;
+  taskCardBlocksEnabled?: boolean | undefined;
   threadTs: string;
   userId?: string;
   userInputBridge?: SlackUserInputBridge;
@@ -102,6 +103,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     renderer,
     reviewUrl,
     sessionStore,
+    taskCardBlocksEnabled = false,
     threadTs,
     userId,
     userInputBridge,
@@ -224,6 +226,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     ...(state.status != null ? { status: state.status } : {}),
     ...(state.activities != null ? { loadingMessages: state.activities } : {}),
     ...(state.composing != null ? { composing: state.composing } : {}),
+    taskCardBlocksEnabled,
     ...(toolHistory.size > 0 ? { toolHistory } : {}),
     ...(progressTasks.size > 0 ? { tasks: [...progressTasks.values()] } : {}),
     clear: state.clear ?? false,
@@ -348,7 +351,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
       }
     }
     if (progressMessageActive && progressMessageTs) {
-      const shouldRetainTaskProgressMessage = progressTasks.size > 0;
+      const shouldRetainTaskProgressMessage = taskCardBlocksEnabled && progressTasks.size > 0;
       if (!shouldRetainTaskProgressMessage) {
         await renderer
           .deleteThreadProgressMessage(client, channel, threadTs, progressMessageTs)
@@ -444,6 +447,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
               threadTs,
               status: 'Composing response...',
               loadingMessages: ['Composing response...'],
+              taskCardBlocksEnabled,
               ...(toolHistory.size > 0 ? { toolHistory } : {}),
               ...(progressTasks.size > 0 ? { tasks: [...progressTasks.values()] } : {}),
               clear: false,

@@ -1,3 +1,4 @@
+import { appRuntimeConfig } from '~/env/server.js';
 import type { AppLogger } from '~/logger/index.js';
 
 import type { SlackWebClientLike } from '../types.js';
@@ -32,19 +33,27 @@ export interface NormalizedThreadContext {
   threadTs: string;
 }
 
+export interface SlackThreadContextLoaderOptions {
+  historyLimit?: number | undefined;
+}
+
 export class SlackThreadContextLoader {
-  constructor(private readonly logger: AppLogger) {}
+  constructor(
+    private readonly logger: AppLogger,
+    private readonly options: SlackThreadContextLoaderOptions = {},
+  ) {}
 
   async loadThread(
     client: SlackWebClientLike,
     channelId: string,
     threadTs: string,
   ): Promise<NormalizedThreadContext> {
+    const limit = this.options.historyLimit ?? appRuntimeConfig.slack.threadHistoryLimit;
     const response = await client.conversations.replies({
       channel: channelId,
       ts: threadTs,
       inclusive: true,
-      limit: 200,
+      limit,
     });
 
     const messages = normalizeThreadMessages(response.messages ?? []);

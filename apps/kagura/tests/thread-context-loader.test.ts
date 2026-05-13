@@ -5,6 +5,23 @@ import { SlackThreadContextLoader } from '~/slack/context/thread-context-loader.
 import type { SlackWebClientLike } from '~/slack/types.js';
 
 describe('SlackThreadContextLoader (images)', () => {
+  it('uses the configured Slack thread history limit when loading replies', async () => {
+    const replies = vi.fn().mockResolvedValue({ messages: [] });
+    const client = {
+      conversations: { replies },
+    } as unknown as SlackWebClientLike;
+    const loader = new SlackThreadContextLoader(createTestLogger(), { historyLimit: 25 });
+
+    await loader.loadThread(client, 'C1', '100.000');
+
+    expect(replies).toHaveBeenCalledWith({
+      channel: 'C1',
+      inclusive: true,
+      limit: 25,
+      ts: '100.000',
+    });
+  });
+
   it('downloads supported thread images into loadedImages with 1-based messageIndex', async () => {
     const pngBytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {

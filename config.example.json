@@ -50,5 +50,9 @@
     "baseUrl": "http://127.0.0.1:3077"
   },
   "sessionDbPath": "./data/sessions.db",
+  "slack": {
+    "taskCardBlocksEnabled": false,
+    "threadHistoryLimit": 200
+  },
   "slackConfigTokenStorePath": "./data/slack-config-tokens.json"
 }

@@ -394,6 +394,43 @@ describe('createActivitySink', () => {
     );
   });
 
+  it('disables Slack task card blocks by default while keeping task progress', async () => {
+    const renderer = createRendererStub();
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    await sink.onEvent({
+      type: 'task-update',
+      taskId: 'cmd-1',
+      title: 'git status',
+      status: 'in_progress',
+      details: 'Checking repository state',
+    });
+
+    expect(renderer.upsertThreadProgressMessage).toHaveBeenCalledWith(
+      expect.anything(),
+      'C123',
+      'ts1',
+      expect.objectContaining({
+        status: 'git status',
+        taskCardBlocksEnabled: false,
+        tasks: [
+          expect.objectContaining({
+            taskId: 'cmd-1',
+            title: 'git status',
+          }),
+        ],
+      }),
+      undefined,
+    );
+  });
+
   it('retains task progress messages when the final assistant reply is posted', async () => {
     const renderer = createRendererStub();
     const sink = createActivitySink({
@@ -402,6 +439,7 @@ describe('createActivitySink', () => {
       logger: createTestLogger(),
       renderer,
       sessionStore: createMockSessionStore(),
+      taskCardBlocksEnabled: true,
       threadTs: 'ts1',
     });
 
@@ -430,6 +468,41 @@ describe('createActivitySink', () => {
     expect(renderer.deleteThreadProgressMessage).not.toHaveBeenCalled();
     expect(renderer.finalizeThreadProgressMessage).not.toHaveBeenCalled();
     expect(renderer.finalizeThreadProgressMessageStopped).not.toHaveBeenCalled();
+  });
+
+  it('clears task progress messages after the final reply when task cards are disabled', async () => {
+    const renderer = createRendererStub();
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      taskCardBlocksEnabled: false,
+      threadTs: 'ts1',
+    });
+
+    await sink.onEvent({
+      type: 'task-update',
+      taskId: 'cmd-1',
+      title: 'git status',
+      status: 'in_progress',
+      details: 'Checking repository state',
+    });
+    await sink.onEvent({
+      type: 'assistant-message',
+      text: 'summary: commands completed',
+    });
+    await sink.onEvent({ type: 'lifecycle', phase: 'completed' });
+
+    await sink.finalize();
+
+    expect(renderer.deleteThreadProgressMessage).toHaveBeenCalledWith(
+      expect.anything(),
+      'C123',
+      'ts1',
+      'progress-ts',
+    );
   });
 
   it('does not block execution when progress message updates fail', async () => {

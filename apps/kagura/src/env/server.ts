@@ -91,6 +91,13 @@ const appConfigSchema = z
       })
       .strict()
       .optional(),
+    slack: z
+      .object({
+        taskCardBlocksEnabled: z.boolean().optional(),
+        threadHistoryLimit: z.number().int().positive().max(1000).optional(),
+      })
+      .strict()
+      .optional(),
     repoRootDir: z.string().optional(),
     repoScanDepth: z.number().int().min(0).optional(),
     worktreeRootDir: z.string().optional(),
@@ -127,6 +134,12 @@ function loadAppConfig(): AppConfig {
 
 const appConfig = loadAppConfig();
 export const appConfigAgentTeams: AppConfigAgentTeams = appConfig.agentTeams ?? {};
+export const appRuntimeConfig = {
+  slack: {
+    taskCardBlocksEnabled: appConfig.slack?.taskCardBlocksEnabled ?? false,
+    threadHistoryLimit: appConfig.slack?.threadHistoryLimit ?? 200,
+  },
+} as const;
 
 function configString(value: string | undefined): string | undefined {
   const trimmed = value?.trim();

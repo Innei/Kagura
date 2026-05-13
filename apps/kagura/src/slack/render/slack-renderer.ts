@@ -52,6 +52,7 @@ interface RendererUiState {
   composing?: boolean | undefined;
   loadingMessages?: string[] | undefined;
   status?: string | undefined;
+  taskCardBlocksEnabled?: boolean | undefined;
   tasks?: ProgressTask[] | undefined;
   threadTs: string;
   toolHistory?: Map<string, number> | undefined;
@@ -691,7 +692,7 @@ export class SlackRenderer {
   }
 
   private buildProgressMessageBlocks(state: RendererUiState): SlackBlock[] {
-    if (state.tasks && state.tasks.length > 0) {
+    if (state.tasks && state.tasks.length > 0 && state.taskCardBlocksEnabled === true) {
       return [
         {
           type: 'plan',

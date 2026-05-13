@@ -65,13 +65,21 @@ Example:
     "model": ""
   },
   "repoRootDir": "~/git",
+  "slack": {
+    "taskCardBlocksEnabled": false,
+    "threadHistoryLimit": 200
+  },
   "worktreeRootDir": "~/git/kagura-worktrees"
 }
 ```
 
 `piAgent.command` and `piAgent.args` configure the Pi Agent adapter. The default is `pi -p --mode json` so Kagura can render Pi text, tool/plugin activity, usage, and generated artifacts in Slack. If Pi is installed through a shell profile or version manager, set `command` to the absolute executable path or export `PI_AGENT_COMMAND`.
 
-Provider model defaults come from `claude.model`, `codex.model`, and `piAgent.model` in `config.json`, or from `CLAUDE_MODEL`, `CODEX_MODEL`, and `PI_AGENT_MODEL` in the environment. In Slack, `/model list` shows models available to the current provider, plus the configured default and current thread override. Pi Agent uses `pi --list-models`, Codex uses `codex debug models`, and Claude Code falls back to supported aliases/common IDs because it does not expose a local model-catalog command. `/model <name>` sets a per-thread model override for the active provider (`claude-code`, `codex-cli`, or `pi-agent`) and clears the provider session handle so the next message starts with the selected model. `/model reset` clears the override and returns to the provider default.
+Provider model defaults come from `claude.model`, `codex.model`, and `piAgent.model` in `config.json`, or from `CLAUDE_MODEL`, `CODEX_MODEL`, and `PI_AGENT_MODEL` in the environment. In Slack, `/model list` shows models available to the current provider, plus the configured default and current thread override. Pi Agent uses `pi --list-models`, Codex uses `codex debug models`, and Claude Code falls back to supported aliases/common IDs because it does not expose a local model-catalog command. `/model <name>` sets a per-thread model override for the active provider (`claude-code`, `codex-cli`, or `pi-agent`) and clears the provider session handle so the next message starts with the selected model. `/model reset` clears the override, drops the provider session handle, and returns to the provider default.
+
+For long Slack threads, `slack.threadHistoryLimit` controls the maximum number of Slack replies Kagura fetches for transcript context. The default is `200`. On resumed sessions Kagura only injects messages that appeared since the previous turn, but the provider's own persisted session can still grow over time. If a long provider session starts timing out repeatedly, use `/model reset` in that thread to clear the session handle, then continue or move durable facts into memory and start a new thread.
+
+`slack.taskCardBlocksEnabled` controls whether progress task updates render as Slack native plan/task-card blocks. The default is `false`, so progress messages use regular context text while still showing the current task title/details. Set it to `true` to opt into Slack native plan/task-card blocks.
 
 `agentTeams` maps Slack user group IDs (`<!subteam^S...>`) to bot user IDs. `members` can be a list of bot user ID strings or objects with `id`, optional `label`, and optional `role`. Labels and roles are shown in the A2A prompt roster so agents know which peer to mention for implementation, review, or other delegated work. When a message mentions a configured team, only `defaultLead` starts an Agent run; other configured members stay idle until the lead or user explicitly mentions them later in the thread.
 

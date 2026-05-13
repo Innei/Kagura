@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 
 import type { AgentExecutionEvent, AgentExecutor } from '~/agent/types.js';
+import { appRuntimeConfig } from '~/env/server.js';
 import { redact } from '~/logger/redact.js';
 import { runtimeError, runtimeInfo, runtimeWarn } from '~/logger/runtime.js';
 import {
@@ -361,6 +362,7 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
     quietAssistantPublicMentionIds: a2aContext?.participants,
     renderer: deps.renderer,
     sessionStore: deps.sessionStore,
+    taskCardBlocksEnabled: appRuntimeConfig.slack.taskCardBlocksEnabled,
     threadTs,
     userId: message.user,
     userInputBridge: deps.userInputBridge,
