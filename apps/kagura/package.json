@@ -1,6 +1,6 @@
 {
   "name": "@innei/kagura",
-  "version": "0.2.1",
+  "version": "0.4.0",
   "description": "Slack-native agent integration for Claude Agent SDK and OpenAI Codex CLI, scaffolded for local execution on macOS.",
   "keywords": [
     "slack",
@@ -23,9 +23,9 @@
   "author": "Innei <i@innei.dev>",
   "type": "module",
   "bin": {
-    "kagura": "./dist/cli.js",
-    "kagura-app": "./dist/index.js",
-    "kagura-memory": "./dist/memory-cli.js"
+    "kagura": "dist/cli.js",
+    "kagura-app": "dist/index.js",
+    "kagura-memory": "dist/memory-cli.js"
   },
   "files": [
     "dist",
