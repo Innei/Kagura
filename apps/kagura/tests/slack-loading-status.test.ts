@@ -270,16 +270,15 @@ describe('Slack loading status test', () => {
       thread_ts: threadTs,
     });
     expect(firstPost.text).not.toBe('Working on your request... — Working on your request...');
+    expect(
+      (firstPost.blocks as SlackBlock[] | undefined)?.some((block) => block.type === 'plan'),
+    ).toBe(false);
     expect(firstPost.blocks).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          type: 'plan',
-          tasks: expect.arrayContaining([
-            expect.objectContaining({
-              task_id: 'task-1',
-              title: 'Inspect the Slack loading flow',
-              status: 'in_progress',
-            }),
+          type: 'context',
+          elements: expect.arrayContaining([
+            expect.objectContaining({ text: 'Inspect the Slack loading flow' }),
           ]),
         }),
       ]),
@@ -298,10 +297,9 @@ describe('Slack loading status test', () => {
         expect.objectContaining({
           blocks: expect.arrayContaining([
             expect.objectContaining({
-              type: 'plan',
-              title: expect.stringContaining('Running'),
-              tasks: expect.arrayContaining([
-                expect.objectContaining({ title: expect.stringContaining('ReadFile') }),
+              type: 'context',
+              elements: expect.arrayContaining([
+                expect.objectContaining({ text: expect.stringContaining('Running') }),
               ]),
             }),
           ]),
@@ -339,7 +337,12 @@ describe('Slack loading status test', () => {
       text: 'Updated loading messages.',
       thread_ts: threadTs,
     });
-    expect(deleteCalls).toEqual([]);
+    expect(deleteCalls).toEqual([
+      {
+        channel: 'C123',
+        ts: '1712345678.000200',
+      },
+    ]);
 
     expect(sessionStore.get(threadTs)?.providerSessionId).toBe('session-1');
   });
