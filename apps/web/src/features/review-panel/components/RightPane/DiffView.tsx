@@ -1,6 +1,7 @@
 import type { FileDiffMetadata } from '@pierre/diffs';
 import { processFile } from '@pierre/diffs';
 import { FileDiff, PatchDiff } from '@pierre/diffs/react';
+import { ChevronDown } from 'lucide-react';
 import { Component, type ReactNode, useMemo } from 'react';
 
 import { splitPatch } from '../../utils/split-patch';
@@ -12,7 +13,10 @@ interface DiffViewProps {
   colorScheme: 'dark' | 'light';
   diff: string;
   diffStyle: DiffStyle;
+  hasMore?: boolean | undefined;
   headContent?: string | undefined;
+  loadingMore?: boolean | undefined;
+  onLoadMore?: (() => void) | undefined;
   selectedPath?: string | undefined;
 }
 
@@ -21,7 +25,10 @@ export function DiffView({
   colorScheme,
   diff,
   diffStyle,
+  hasMore = false,
   headContent,
+  loadingMore = false,
+  onLoadMore,
   selectedPath,
 }: DiffViewProps) {
   const fileDiff = useMemo<FileDiffMetadata | undefined>(() => {
@@ -61,6 +68,7 @@ export function DiffView({
           <PatchDiff disableWorkerPool options={sharedOptions} patch={patch} />
         </div>
       ))}
+      <LoadMoreFooter hasMore={hasMore} loading={loadingMore} onLoadMore={onLoadMore} />
     </div>
   );
 
@@ -71,12 +79,36 @@ export function DiffView({
           <div className={styles.patch}>
             <FileDiff disableWorkerPool fileDiff={fileDiff} options={sharedOptions} />
           </div>
+          <LoadMoreFooter hasMore={hasMore} loading={loadingMore} onLoadMore={onLoadMore} />
         </div>
       </DiffFallback>
     );
   }
 
   return fallback;
+}
+
+interface LoadMoreFooterProps {
+  hasMore: boolean;
+  loading: boolean;
+  onLoadMore?: (() => void) | undefined;
+}
+
+function LoadMoreFooter({ hasMore, loading, onLoadMore }: LoadMoreFooterProps) {
+  if (!hasMore) return null;
+  return (
+    <div className={styles.loadMoreBar}>
+      <button
+        className={styles.loadMoreButton}
+        disabled={loading}
+        type="button"
+        onClick={onLoadMore}
+      >
+        <ChevronDown aria-hidden="true" size={14} />
+        {loading ? 'Loading...' : 'Load more'}
+      </button>
+    </div>
+  );
 }
 
 interface DiffFallbackProps {

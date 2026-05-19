@@ -79,6 +79,7 @@ export class SqliteReviewSessionStore implements ReviewSessionStore {
     executionId: string,
     input: {
       baseBranch?: string | undefined;
+      baseHead?: string | undefined;
       workspaceLabel?: string | undefined;
       workspacePath: string;
       workspaceRepoId?: string | undefined;
@@ -88,6 +89,7 @@ export class SqliteReviewSessionStore implements ReviewSessionStore {
       .update(reviewSessions)
       .set({
         baseBranch: input.baseBranch ?? null,
+        baseHead: input.baseHead ?? null,
         updatedAt: new Date().toISOString(),
         workspaceLabel: input.workspaceLabel ?? null,
         workspacePath: input.workspacePath,

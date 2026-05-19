@@ -101,6 +101,8 @@ describe('GitReviewService', () => {
       { path: 'src/index.ts', status: 'M', additions: 1, deletions: 1 },
       { path: 'src/new.ts', status: '??', additions: 1, deletions: 0 },
     ]);
+    expect(session).not.toHaveProperty('changedFilesSnapshot');
+    expect(session).not.toHaveProperty('diffSnapshot');
 
     const fullDiff = service.getDiff('exec-snapshot') ?? '';
     expect(fullDiff).toContain('export const value = 2;');
@@ -112,6 +114,47 @@ describe('GitReviewService', () => {
     expect(fileDiff).not.toContain('src/new.ts');
 
     await expect(service.getFile('exec-snapshot', 'src/index.ts', 'head')).resolves.toBeUndefined();
+
+    sqlite.close();
+  });
+
+  it('returns paginated review diffs from changed file order', () => {
+    const workspacePath = createGitFixture();
+    const baseHead = resolveGitHead(workspacePath);
+    expect(baseHead).toBeTruthy();
+
+    for (let index = 0; index < 12; index++) {
+      fs.writeFileSync(
+        path.join(workspacePath, `src/page-${String(index).padStart(2, '0')}.ts`),
+        `export const value${index} = ${index};\n`,
+      );
+    }
+
+    const { db, sqlite } = createTestDatabase();
+    const store = new SqliteReviewSessionStore(db);
+    store.start({
+      baseBranch: 'main',
+      baseHead,
+      channelId: 'C1',
+      createdAt: new Date().toISOString(),
+      executionId: 'exec-page',
+      threadTs: '123.456',
+      workspaceLabel: 'fixture',
+      workspacePath,
+      workspaceRepoId: 'fixture',
+    });
+
+    const service = new GitReviewService(store);
+    const firstPage = service.getDiffPage('exec-page', 0, 10);
+    expect(firstPage).toMatchObject({ hasMore: true, nextOffset: 10 });
+    expect(firstPage?.diff).toContain('src/page-00.ts');
+    expect(firstPage?.diff).toContain('src/page-09.ts');
+    expect(firstPage?.diff).not.toContain('src/page-10.ts');
+
+    const secondPage = service.getDiffPage('exec-page', 10, 10);
+    expect(secondPage).toMatchObject({ hasMore: false, nextOffset: 12 });
+    expect(secondPage?.diff).toContain('src/page-10.ts');
+    expect(secondPage?.diff).toContain('src/page-11.ts');
 
     sqlite.close();
   });

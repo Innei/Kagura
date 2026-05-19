@@ -11,6 +11,8 @@ interface RightPaneProps {
   compactBreadcrumb?: boolean | undefined;
   contentLoading: boolean;
   diff: string;
+  diffHasMore?: boolean | undefined;
+  diffLoadingMore?: boolean | undefined;
   diffStyle: DiffStyle;
   file?: ReviewFileResponse | undefined;
   hideStylePill?: boolean | undefined;
@@ -18,6 +20,7 @@ interface RightPaneProps {
   onChangeDiffStyle: (next: DiffStyle) => void;
   onChangeViewMode: (next: ViewMode) => void;
   onCopyPath: () => void;
+  onLoadMoreDiff?: (() => void) | undefined;
   onNext: () => void;
   onOpenDrawer?: (() => void) | undefined;
   onOpenSheet?: (() => void) | undefined;
@@ -33,6 +36,8 @@ export function RightPane({
   compactBreadcrumb,
   contentLoading,
   diff,
+  diffHasMore,
+  diffLoadingMore,
   diffStyle,
   file,
   hideStylePill,
@@ -40,6 +45,7 @@ export function RightPane({
   onChangeDiffStyle,
   onChangeViewMode,
   onCopyPath,
+  onLoadMoreDiff,
   onNext,
   onOpenDrawer,
   onOpenSheet,
@@ -93,8 +99,11 @@ export function RightPane({
             colorScheme={colorScheme}
             diff={diff}
             diffStyle={diffStyle}
+            hasMore={diffHasMore ?? false}
             headContent={textContent}
+            loadingMore={diffLoadingMore ?? false}
             selectedPath={selectedPath}
+            onLoadMore={onLoadMoreDiff}
           />
         )}
       </div>

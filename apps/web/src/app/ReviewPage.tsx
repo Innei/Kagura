@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import {
   loadDiff,
@@ -19,6 +19,8 @@ interface ReviewPageProps {
   executionId: string;
 }
 
+const OVERVIEW_DIFF_PAGE_SIZE = 10;
+
 function readPathFromUrl(): string | undefined {
   if (typeof window === 'undefined') return undefined;
   const value = new URLSearchParams(window.location.search).get('path');
@@ -35,6 +37,9 @@ export function ReviewPage({ apiBasePath, executionId }: ReviewPageProps) {
   const [session, setSession] = useState<ReviewSession | undefined>();
   const [selectedPath, setSelectedPath] = useState<string | undefined>(() => readPathFromUrl());
   const [diff, setDiff] = useState('');
+  const [diffHasMore, setDiffHasMore] = useState(false);
+  const [diffNextOffset, setDiffNextOffset] = useState(0);
+  const [diffLoadingMore, setDiffLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | undefined>();
   const [treeEntries, setTreeEntries] = useState<ReviewTreeEntry[] | undefined>();
@@ -43,6 +48,7 @@ export function ReviewPage({ apiBasePath, executionId }: ReviewPageProps) {
   const [contentLoading, setContentLoading] = useState(false);
   const [baseFile, setBaseFile] = useState<ReviewFileResponse | undefined>(undefined);
   const initialView = readViewFromUrl();
+  const diffRequestIdRef = useRef(0);
 
   useEffect(() => {
     setLoading(true);
@@ -50,6 +56,9 @@ export function ReviewPage({ apiBasePath, executionId }: ReviewPageProps) {
     setSession(undefined);
     setSelectedPath(readPathFromUrl());
     setDiff('');
+    setDiffHasMore(false);
+    setDiffNextOffset(0);
+    setDiffLoadingMore(false);
     void loadInitialReviewData(executionId, apiBasePath)
       .then(({ session: nextSession }) => {
         setSession(nextSession);
@@ -63,11 +72,27 @@ export function ReviewPage({ apiBasePath, executionId }: ReviewPageProps) {
 
   useEffect(() => {
     if (loading || error) return;
-    void loadDiff(executionId, selectedPath, apiBasePath)
-      .then((nextDiff) => setDiff(nextDiff))
+    setDiff('');
+    setDiffHasMore(false);
+    setDiffNextOffset(0);
+    setDiffLoadingMore(false);
+    const requestId = ++diffRequestIdRef.current;
+    const options = selectedPath ? undefined : { limit: OVERVIEW_DIFF_PAGE_SIZE, offset: 0 };
+    let cancelled = false;
+    void loadDiff(executionId, selectedPath, apiBasePath, options)
+      .then((payload) => {
+        if (cancelled || requestId !== diffRequestIdRef.current) return;
+        setDiff(payload.diff);
+        setDiffHasMore(!selectedPath && Boolean(payload.hasMore));
+        setDiffNextOffset(!selectedPath ? (payload.nextOffset ?? OVERVIEW_DIFF_PAGE_SIZE) : 0);
+      })
       .catch((err: unknown) => {
+        if (cancelled || requestId !== diffRequestIdRef.current) return;
         setError(err instanceof Error ? err.message : String(err));
       });
+    return () => {
+      cancelled = true;
+    };
   }, [apiBasePath, error, executionId, loading, selectedPath]);
 
   useEffect(() => {
@@ -124,17 +149,42 @@ export function ReviewPage({ apiBasePath, executionId }: ReviewPageProps) {
       });
   };
 
+  const handleLoadMoreDiff = () => {
+    if (selectedPath || !diffHasMore || diffLoadingMore) return;
+    const requestId = diffRequestIdRef.current;
+    setDiffLoadingMore(true);
+    void loadDiff(executionId, undefined, apiBasePath, {
+      limit: OVERVIEW_DIFF_PAGE_SIZE,
+      offset: diffNextOffset,
+    })
+      .then((payload) => {
+        if (requestId !== diffRequestIdRef.current) return;
+        setDiff((current) => [current, payload.diff].filter(Boolean).join('\n'));
+        setDiffHasMore(Boolean(payload.hasMore));
+        setDiffNextOffset(payload.nextOffset ?? diffNextOffset + OVERVIEW_DIFF_PAGE_SIZE);
+        setDiffLoadingMore(false);
+      })
+      .catch((err: unknown) => {
+        if (requestId !== diffRequestIdRef.current) return;
+        setError(err instanceof Error ? err.message : String(err));
+        setDiffLoadingMore(false);
+      });
+  };
+
   return (
     <ReviewLayout
       baseFile={baseFile}
       contentLoading={contentLoading}
       diff={diff}
+      diffHasMore={diffHasMore && !selectedPath}
+      diffLoadingMore={diffLoadingMore}
       file={file}
       initialViewMode={initialView}
       selectedPath={selectedPath}
       session={session}
       treeEntries={treeEntries}
       treeLoading={treeLoading}
+      onLoadMoreDiff={handleLoadMoreDiff}
       onRequestTree={handleRequestTree}
       onSelectPath={setSelectedPath}
     />

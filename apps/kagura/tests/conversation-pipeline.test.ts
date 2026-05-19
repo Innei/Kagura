@@ -670,6 +670,9 @@ describe('executeAgent step', () => {
       expect.any(String),
       expect.objectContaining({
         baseBranch: 'feature/worktree',
+        baseHead: execFileSync('git', ['-C', worktreePath, 'rev-parse', 'HEAD'], {
+          encoding: 'utf8',
+        }).trim(),
         workspaceLabel: 'slack-cc-bot-worktree',
         workspacePath: worktreePath,
         workspaceRepoId: 'innei-repo/slack-cc-bot',

@@ -29,3 +29,35 @@ export const empty = css`
   justify-content: center;
   padding: token(spacing.4);
 `;
+
+export const loadMoreBar = css`
+  align-items: center;
+  border-top: 1px solid token(colors.border.default);
+  display: flex;
+  justify-content: center;
+  padding: token(spacing.3);
+`;
+
+export const loadMoreButton = css`
+  align-items: center;
+  background: token(colors.bg.subtle);
+  border: 1px solid token(colors.border.default);
+  border-radius: token(radii.sm);
+  color: token(colors.fg.default);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: token(fontSizes.xs);
+  font-weight: 500;
+  gap: token(spacing.1);
+  height: 30px;
+  padding: 0 token(spacing.3);
+
+  &:hover:not(:disabled) {
+    background: token(colors.bg.hover);
+  }
+
+  &:disabled {
+    color: token(colors.fg.muted);
+    cursor: default;
+  }
+`;

@@ -48,6 +48,7 @@ export interface ReviewSessionStore {
     executionId: string,
     input: {
       baseBranch?: string | undefined;
+      baseHead?: string | undefined;
       workspaceLabel?: string | undefined;
       workspacePath: string;
       workspaceRepoId?: string | undefined;

@@ -18,13 +18,22 @@ export interface ReviewTreeEntry {
   type: 'file';
 }
 
-export interface ReviewSessionDetails extends ReviewSessionRecord {
+export interface ReviewSessionDetails extends Omit<
+  ReviewSessionRecord,
+  'changedFilesSnapshot' | 'diffSnapshot'
+> {
   changedFiles: ReviewChangedFile[];
 }
 
 export interface ReviewSessionSnapshot {
   changedFilesSnapshot: string;
   diffSnapshot: string;
+}
+
+export interface ReviewDiffPage {
+  diff: string;
+  hasMore: boolean;
+  nextOffset: number;
 }
 
 export class GitReviewService {
@@ -35,7 +44,7 @@ export class GitReviewService {
     if (!session) return undefined;
 
     return {
-      ...session,
+      ...toPublicSession(session),
       changedFiles: readChangedFilesSnapshot(session) ?? getChangedFiles(session),
     };
   }
@@ -91,6 +100,26 @@ export class GitReviewService {
       .filter(Boolean);
 
     return [diff, ...untrackedDiffs].filter(Boolean).join('\n');
+  }
+
+  getDiffPage(executionId: string, offset: number, limit: number): ReviewDiffPage | undefined {
+    const session = this.store.get(executionId);
+    if (!session) return undefined;
+
+    const changedFiles = readChangedFilesSnapshot(session) ?? getChangedFiles(session);
+    const start = Math.max(0, offset);
+    const pageSize = Math.max(1, limit);
+    const files = changedFiles.slice(start, start + pageSize);
+    const chunks = files
+      .map((file) => this.getDiff(executionId, file.path))
+      .filter((diff): diff is string => Boolean(diff?.trim()));
+    const nextOffset = start + files.length;
+
+    return {
+      diff: chunks.join('\n'),
+      hasMore: nextOffset < changedFiles.length,
+      nextOffset,
+    };
   }
 
   async getFile(
@@ -161,6 +190,23 @@ export function resolveGitHead(workspacePath: string): string | undefined {
 
 export function resolveGitBranch(workspacePath: string): string | undefined {
   return runGit(workspacePath, ['branch', '--show-current']) || undefined;
+}
+
+function toPublicSession(session: ReviewSessionRecord): Omit<ReviewSessionDetails, 'changedFiles'> {
+  return {
+    baseBranch: session.baseBranch,
+    baseHead: session.baseHead,
+    channelId: session.channelId,
+    createdAt: session.createdAt,
+    executionId: session.executionId,
+    head: session.head,
+    status: session.status,
+    threadTs: session.threadTs,
+    updatedAt: session.updatedAt,
+    workspaceLabel: session.workspaceLabel,
+    workspacePath: session.workspacePath,
+    workspaceRepoId: session.workspaceRepoId,
+  };
 }
 
 function getChangedFiles(session: ReviewSessionRecord): ReviewChangedFile[] {

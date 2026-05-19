@@ -20,6 +20,8 @@ export interface ReviewSession {
 
 export interface ReviewDiffResponse {
   diff: string;
+  hasMore?: boolean | undefined;
+  nextOffset?: number | undefined;
 }
 
 export interface ReviewTreeEntry {

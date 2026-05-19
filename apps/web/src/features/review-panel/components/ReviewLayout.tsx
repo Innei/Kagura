@@ -28,8 +28,11 @@ interface ReviewLayoutProps {
   baseFile?: ReviewFileResponse | undefined;
   contentLoading?: boolean;
   diff: string;
+  diffHasMore?: boolean;
+  diffLoadingMore?: boolean;
   file?: ReviewFileResponse | undefined;
   initialViewMode?: ViewMode | undefined;
+  onLoadMoreDiff?: () => void;
   onRequestTree?: () => void;
   onSelectPath: (path: string | undefined) => void;
   selectedPath?: string | undefined;
@@ -42,8 +45,11 @@ export function ReviewLayout({
   baseFile,
   contentLoading,
   diff,
+  diffHasMore = false,
+  diffLoadingMore = false,
   file,
   initialViewMode,
+  onLoadMoreDiff,
   onRequestTree,
   onSelectPath,
   selectedPath,
@@ -240,6 +246,8 @@ export function ReviewLayout({
               colorScheme={colorScheme}
               contentLoading={contentLoading ?? false}
               diff={diff}
+              diffHasMore={diffHasMore}
+              diffLoadingMore={diffLoadingMore}
               diffStyle={diffStyle}
               file={file}
               selectedFile={selectedFile}
@@ -248,6 +256,7 @@ export function ReviewLayout({
               onChangeDiffStyle={setDiffStyle}
               onChangeViewMode={setViewMode}
               onCopyPath={handleCopyPath}
+              onLoadMoreDiff={onLoadMoreDiff}
               onNext={goNext}
               onPrevious={goPrevious}
             />
@@ -261,6 +270,8 @@ export function ReviewLayout({
             compactBreadcrumb={isMobile}
             contentLoading={contentLoading ?? false}
             diff={diff}
+            diffHasMore={diffHasMore}
+            diffLoadingMore={diffLoadingMore}
             diffStyle={effectiveDiffStyle}
             file={file}
             hideStylePill={isMobile}
@@ -271,6 +282,7 @@ export function ReviewLayout({
             onChangeDiffStyle={setDiffStyle}
             onChangeViewMode={setViewMode}
             onCopyPath={handleCopyPath}
+            onLoadMoreDiff={onLoadMoreDiff}
             onNext={goNext}
             onOpenDrawer={isTablet ? handleOpenDrawer : undefined}
             onOpenSheet={isMobile ? handleOpenSheet : undefined}

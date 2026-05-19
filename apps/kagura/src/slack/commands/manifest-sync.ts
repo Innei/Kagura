@@ -85,6 +85,7 @@ export interface ManifestSyncOptions {
 
 const OBSOLETE_BOT_EVENTS = ['app_mention'] as const;
 const OBSOLETE_BOT_SCOPES = ['app_mentions:read'] as const;
+const MANIFEST_SYNC_REQUEST_TIMEOUT_MS = 15_000;
 
 export async function syncSlashCommands(options: ManifestSyncOptions): Promise<void> {
   const { appId, logger } = options;
@@ -388,6 +389,7 @@ async function exportManifest(
         'Content-Type': 'application/json; charset=utf-8',
       },
       body: JSON.stringify({ app_id: appId }),
+      signal: AbortSignal.timeout(MANIFEST_SYNC_REQUEST_TIMEOUT_MS),
     });
 
     if (!response.ok) {
@@ -418,6 +420,7 @@ async function updateManifest(
         'Content-Type': 'application/json; charset=utf-8',
       },
       body: JSON.stringify({ app_id: appId, manifest }),
+      signal: AbortSignal.timeout(MANIFEST_SYNC_REQUEST_TIMEOUT_MS),
     });
 
     if (!response.ok) {

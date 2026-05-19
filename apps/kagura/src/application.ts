@@ -240,6 +240,10 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
     logger,
     threadExecutionRegistry,
     async start() {
+      if (reviewPanelServer) {
+        await reviewPanelServer.start();
+        reviewPanelStarted = true;
+      }
       if (
         !options?.skipManifestSync &&
         env.SLACK_APP_ID &&
@@ -262,10 +266,6 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
         await slackApp.start();
         slackAppStarted = true;
       }, logger.withTag('slack:socket'));
-      if (reviewPanelServer) {
-        await reviewPanelServer.start();
-        reviewPanelStarted = true;
-      }
       memoryReconciler.start();
       slackApp.startA2ASummaryPoller?.();
       logger.info('Slack Socket Mode application started.');

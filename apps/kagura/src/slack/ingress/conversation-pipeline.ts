@@ -604,6 +604,7 @@ function createPersistentExecutionSink(
         options?.onWorkspaceContext?.(event);
         deps.reviewSessionStore?.updateWorkspaceContext?.(executionId, {
           baseBranch: resolveGitBranch(event.workspacePath),
+          baseHead: resolveGitHead(event.workspacePath),
           ...(event.workspaceLabel ? { workspaceLabel: event.workspaceLabel } : {}),
           workspacePath: event.workspacePath,
           ...(event.workspaceRepoId ? { workspaceRepoId: event.workspaceRepoId } : {}),

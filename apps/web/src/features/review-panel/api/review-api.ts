@@ -18,12 +18,17 @@ export async function loadDiff(
   reviewExecutionId: string,
   filePath?: string | undefined,
   apiBasePath = '',
-): Promise<string> {
-  const suffix = filePath ? `?path=${encodeURIComponent(filePath)}` : '';
+  options?: { limit?: number | undefined; offset?: number | undefined } | undefined,
+): Promise<ReviewDiffResponse> {
+  const params = new URLSearchParams();
+  if (filePath) params.set('path', filePath);
+  if (!filePath && options?.limit !== undefined) params.set('limit', String(options.limit));
+  if (!filePath && options?.offset !== undefined) params.set('offset', String(options.offset));
+  const suffix = params.size > 0 ? `?${params.toString()}` : '';
   const payload = await getJson<ReviewDiffResponse>(
     apiUrl(apiBasePath, `/api/reviews/${encodeURIComponent(reviewExecutionId)}/diff${suffix}`),
   );
-  return payload.diff;
+  return payload;
 }
 
 export async function loadTree(

@@ -125,7 +125,20 @@ async function handleApiRequest(
 
   if (apiResource === 'diff') {
     try {
-      const diff = reviewService.getDiff(executionId, url.searchParams.get('path') ?? undefined);
+      const filePath = url.searchParams.get('path') ?? undefined;
+      const limit = parsePositiveInt(url.searchParams.get('limit'));
+      const offset = parseNonNegativeInt(url.searchParams.get('offset')) ?? 0;
+      if (!filePath && limit !== undefined) {
+        const page = reviewService.getDiffPage(executionId, offset, limit);
+        if (page === undefined) {
+          sendJson(response, 404, { error: 'Review session not found.' });
+          return;
+        }
+        sendJson(response, 200, page);
+        return;
+      }
+
+      const diff = reviewService.getDiff(executionId, filePath);
       if (diff === undefined) {
         sendJson(response, 404, { error: 'Review session not found.' });
         return;
@@ -159,6 +172,20 @@ async function handleApiRequest(
   }
 
   sendJson(response, 404, { error: 'Not Found' });
+}
+
+function parsePositiveInt(value: string | null): number | undefined {
+  if (value === null) return undefined;
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isSafeInteger(parsed) || parsed < 1) return undefined;
+  return Math.min(parsed, 100);
+}
+
+function parseNonNegativeInt(value: string | null): number | undefined {
+  if (value === null) return undefined;
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) return undefined;
+  return parsed;
 }
 
 async function serveReviewPanelAsset(
