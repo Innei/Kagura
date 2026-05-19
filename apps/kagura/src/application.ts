@@ -1,8 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { resolveKaguraPaths } from '@kagura/cli/config/paths';
-
 import { ClaudeAgentSdkExecutor } from '~/agent/providers/claude-code/adapter.js';
 import { CodexCliExecutor } from '~/agent/providers/codex-cli/adapter.js';
 import { PiAgentExecutor } from '~/agent/providers/pi-agent/adapter.js';
@@ -13,7 +11,12 @@ import { SqliteChannelPreferenceStore } from '~/channel-preference/sqlite-channe
 import { createDatabase } from '~/db/index.js';
 import { FileClaudeExecutionProbe } from '~/e2e/live/file-claude-execution-probe.js';
 import { FileSlackStatusProbe } from '~/e2e/live/file-slack-status-probe.js';
-import { appConfigAgentTeams, env, validateLiveE2EEnv } from '~/env/server.js';
+import {
+  appConfigAgentTeams,
+  env,
+  resolveConfiguredSessionDbPath,
+  validateLiveE2EEnv,
+} from '~/env/server.js';
 import { type AppLogger, createRootLogger } from '~/logger/index.js';
 import { SqliteMemoryIngestionAuditStore } from '~/memory/ingestion/audit-store.js';
 import { MemoryIngestionService } from '~/memory/ingestion/service.js';
@@ -70,13 +73,10 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
   const logger = createRootLogger().withTag(options?.instanceLabel ?? 'bootstrap');
   validateLiveE2EEnv();
 
-  const kaguraPaths = resolveKaguraPaths();
   const dbPath =
     options?.sessionDbPath !== undefined
       ? path.resolve(process.cwd(), options.sessionDbPath)
-      : env.SESSION_DB_PATH === './data/sessions.db'
-        ? kaguraPaths.dbPath
-        : path.resolve(process.cwd(), env.SESSION_DB_PATH);
+      : resolveConfiguredSessionDbPath();
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   const { db, sqlite } = createDatabase(dbPath);
   const a2aCoordinatorDbPath = path.resolve(
@@ -176,10 +176,12 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
     logger.withTag('codex:session'),
     memoryStore,
     channelPreferenceStore,
+    dbPath,
   );
   const piAgentExecutor = new PiAgentExecutor(
     logger.withTag('pi-agent:session'),
     channelPreferenceStore,
+    dbPath,
   );
   const providerRegistry = createProviderRegistry(
     options?.defaultProviderId ?? env.AGENT_DEFAULT_PROVIDER,

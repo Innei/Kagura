@@ -371,6 +371,14 @@ export const env = createEnv({
   emptyStringAsUndefined: true,
 });
 
+export function resolveConfiguredSessionDbPath(): string {
+  if (env.SESSION_DB_PATH === './data/sessions.db') {
+    return kaguraPaths.dbPath;
+  }
+
+  return path.resolve(process.cwd(), env.SESSION_DB_PATH);
+}
+
 export type AppEnv = typeof env;
 
 export function validateLiveE2EEnv(): void {

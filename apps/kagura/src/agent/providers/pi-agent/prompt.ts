@@ -18,7 +18,7 @@ import {
   userMessageProcessor,
 } from '~/agent/prompt/index.js';
 import type { AgentExecutionRequest } from '~/agent/types.js';
-import { env } from '~/env/server.js';
+import { resolveConfiguredSessionDbPath } from '~/env/server.js';
 
 const PI_AGENT_PROMPT_PROCESSORS = [
   identityProcessor,
@@ -130,7 +130,10 @@ function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
-export function getPiAgentRuntimePaths(request: AgentExecutionRequest): PiAgentRuntimePaths {
+export function getPiAgentRuntimePaths(
+  request: AgentExecutionRequest,
+  memoryDbPath = resolveConfiguredSessionDbPath(),
+): PiAgentRuntimePaths {
   const rootSuffix = sanitizeRuntimePathPart(
     [request.channelId, request.threadTs, request.executionId ?? 'memory'].join('-'),
   );
@@ -141,7 +144,7 @@ export function getPiAgentRuntimePaths(request: AgentExecutionRequest): PiAgentR
       request.executionId ?? 'channel',
     )}-channel-ops.jsonl`,
     generatedArtifactsDir,
-    memoryDbPath: env.SESSION_DB_PATH,
+    memoryDbPath,
     runtimeDir,
   };
 }

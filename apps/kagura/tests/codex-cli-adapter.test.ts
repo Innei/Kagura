@@ -17,6 +17,7 @@ import type {
 import type { AppLogger } from '~/logger/index.js';
 
 const spawnMock = vi.hoisted(() => vi.fn());
+const TEST_SESSION_DB_PATH = path.resolve(process.cwd(), './data/test-sessions.db');
 
 vi.mock('node:child_process', async () => {
   const actual = await vi.importActual<typeof import('node:child_process')>('node:child_process');
@@ -211,7 +212,7 @@ describe('CodexCliExecutor', () => {
       expect.arrayContaining(['exec', '--json', '--sandbox', 'danger-full-access']),
       expect.objectContaining({
         env: expect.objectContaining({
-          KAGURA_DB_PATH: './data/test-sessions.db',
+          KAGURA_DB_PATH: TEST_SESSION_DB_PATH,
           PATH: expect.stringContaining(runtimePaths.runtimeDir),
         }),
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -537,8 +538,8 @@ describe('CodexCliExecutor', () => {
 
   it('codex prompt mentions kagura-memory CLI for memory ops', () => {
     const prompt = buildCodexPrompt(createRequest());
-    expect(prompt).toContain("KAGURA_DB_PATH='./data/test-sessions.db' kagura-memory save");
-    expect(prompt).toContain("KAGURA_DB_PATH='./data/test-sessions.db' kagura-memory recall");
+    expect(prompt).toContain(`KAGURA_DB_PATH='${TEST_SESSION_DB_PATH}' kagura-memory save`);
+    expect(prompt).toContain(`KAGURA_DB_PATH='${TEST_SESSION_DB_PATH}' kagura-memory recall`);
     expect(prompt).not.toContain('memory-ops.jsonl');
   });
 

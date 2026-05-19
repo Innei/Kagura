@@ -13,7 +13,7 @@ import type {
   SessionUsageInfo,
 } from '~/agent/types.js';
 import type { ChannelPreferenceStore } from '~/channel-preference/types.js';
-import { env } from '~/env/server.js';
+import { env, resolveConfiguredSessionDbPath } from '~/env/server.js';
 import type { AppLogger } from '~/logger/index.js';
 import { redact } from '~/logger/redact.js';
 import type { MemoryStore } from '~/memory/types.js';
@@ -183,6 +183,7 @@ export class CodexCliExecutor implements AgentExecutor {
     private readonly logger: AppLogger,
     private readonly memoryStore?: MemoryStore | undefined,
     private readonly channelPreferenceStore?: ChannelPreferenceStore | undefined,
+    private readonly memoryDbPath = resolveConfiguredSessionDbPath(),
   ) {
     this.logger.info(
       'Codex CLI provider configured: model=%s reasoning=%s sandbox=%s',
@@ -216,7 +217,7 @@ export class CodexCliExecutor implements AgentExecutor {
     const executionId = request.executionId ?? 'unknown';
     const executionStartedAt = Date.now();
     const args = this.buildArgs(request);
-    const runtimePaths = getCodexRuntimePaths(request);
+    const runtimePaths = getCodexRuntimePaths(request, this.memoryDbPath);
     const cwd = request.workspacePath ?? runtimePaths.runtimeDir;
     const prompt = buildCodexPrompt(request, runtimePaths);
     const { channelOpsPath, generatedArtifactsDir, runtimeDir } = runtimePaths;
@@ -247,7 +248,7 @@ export class CodexCliExecutor implements AgentExecutor {
         cwd,
         env: {
           ...process.env,
-          KAGURA_DB_PATH: env.SESSION_DB_PATH,
+          KAGURA_DB_PATH: this.memoryDbPath,
           PATH: prependPath(runtimeDir, process.env.PATH),
         },
         stdio: ['pipe', 'pipe', 'pipe'],

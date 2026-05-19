@@ -13,7 +13,7 @@ import type {
   SessionUsageInfo,
 } from '~/agent/types.js';
 import type { ChannelPreferenceStore } from '~/channel-preference/types.js';
-import { env } from '~/env/server.js';
+import { env, resolveConfiguredSessionDbPath } from '~/env/server.js';
 import type { AppLogger } from '~/logger/index.js';
 import { redact } from '~/logger/redact.js';
 
@@ -151,6 +151,7 @@ export class PiAgentExecutor implements AgentExecutor {
   constructor(
     private readonly logger: AppLogger,
     private readonly channelPreferenceStore?: ChannelPreferenceStore | undefined,
+    private readonly memoryDbPath = resolveConfiguredSessionDbPath(),
   ) {
     this.logger.info(
       'Pi Agent provider configured: command=%s args=%s model=%s',
@@ -183,7 +184,7 @@ export class PiAgentExecutor implements AgentExecutor {
   ): Promise<void> {
     const executionId = request.executionId ?? 'unknown';
     const executionStartedAt = Date.now();
-    const runtimePaths = getPiAgentRuntimePaths(request);
+    const runtimePaths = getPiAgentRuntimePaths(request, this.memoryDbPath);
     const cwd = request.workspacePath ?? runtimePaths.runtimeDir;
     const prompt = buildPiAgentPrompt(request, runtimePaths);
     const streamState: PiStreamState = {
@@ -224,7 +225,7 @@ export class PiAgentExecutor implements AgentExecutor {
         cwd,
         env: {
           ...process.env,
-          KAGURA_DB_PATH: env.SESSION_DB_PATH,
+          KAGURA_DB_PATH: this.memoryDbPath,
           PATH: prependPath(runtimePaths.runtimeDir, process.env.PATH),
         },
         stdio: ['pipe', 'pipe', 'pipe'],

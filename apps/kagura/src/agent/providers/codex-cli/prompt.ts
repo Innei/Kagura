@@ -19,7 +19,7 @@ import {
   userMessageProcessor,
 } from '~/agent/prompt/index.js';
 import type { AgentExecutionRequest } from '~/agent/types.js';
-import { env } from '~/env/server.js';
+import { resolveConfiguredSessionDbPath } from '~/env/server.js';
 
 const TMP_DIR = '/tmp/kagura';
 const CACHE_IMAGE_DIR = path.resolve(TMP_DIR, 'cache/images');
@@ -138,7 +138,10 @@ function buildCodexImageInputSection(
   return lines.join('\n');
 }
 
-export function getCodexRuntimePaths(request: AgentExecutionRequest): CodexRuntimePaths {
+export function getCodexRuntimePaths(
+  request: AgentExecutionRequest,
+  memoryDbPath = resolveConfiguredSessionDbPath(),
+): CodexRuntimePaths {
   const rootSuffix = sanitizeRuntimePathPart(
     [request.channelId, request.threadTs, request.executionId ?? 'memory'].join('-'),
   );
@@ -150,7 +153,7 @@ export function getCodexRuntimePaths(request: AgentExecutionRequest): CodexRunti
   return {
     channelOpsPath,
     generatedArtifactsDir,
-    memoryDbPath: env.SESSION_DB_PATH,
+    memoryDbPath,
     runtimeDir,
   };
 }
