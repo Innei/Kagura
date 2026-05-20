@@ -667,16 +667,6 @@ export class CodexCliExecutor implements AgentExecutor {
       request,
       sink,
     );
-
-    if (status === 'in_progress') {
-      await sink.onEvent({
-        type: 'activity-state',
-        state: {
-          status: title,
-          threadTs: request.threadTs,
-        },
-      });
-    }
   }
 
   private toUsageInfo(

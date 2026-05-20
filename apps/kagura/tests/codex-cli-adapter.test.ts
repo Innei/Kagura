@@ -235,7 +235,7 @@ describe('CodexCliExecutor', () => {
         title: 'pwd',
       }),
     );
-    expect(events).toContainEqual({
+    expect(events).not.toContainEqual({
       type: 'activity-state',
       state: {
         status: 'pwd',
@@ -624,13 +624,6 @@ describe('CodexCliExecutor', () => {
     const events: AgentExecutionEvent[] = [];
     await new CodexCliExecutor(createLogger()).execute(request, createSink(events));
 
-    expect(events).toContainEqual({
-      type: 'activity-state',
-      state: {
-        status: 'Saving memory...',
-        threadTs: '1712345678.000100',
-      },
-    });
     expect(events).toContainEqual(
       expect.objectContaining({
         type: 'task-update',
@@ -683,13 +676,6 @@ describe('CodexCliExecutor', () => {
     const events: AgentExecutionEvent[] = [];
     await new CodexCliExecutor(createLogger()).execute(createRequest(), createSink(events));
 
-    expect(events).toContainEqual({
-      type: 'activity-state',
-      state: {
-        status: 'git submodule status',
-        threadTs: '1712345678.000100',
-      },
-    });
     expect(events).toContainEqual(
       expect.objectContaining({
         type: 'task-update',

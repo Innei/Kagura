@@ -922,6 +922,7 @@ function collectToolActivity(
   if (state.status?.trim()) candidates.push(state.status);
 
   const currentActivities = new Set<string>();
+  const labelsSeenInState = new Set<string>();
 
   for (const msg of candidates) {
     const trimmed = msg.trim();
@@ -936,6 +937,8 @@ function collectToolActivity(
 
     const verb = match[1]!;
     const label = verb === 'Using' ? (match[2]!.split(/\s/)[0] ?? verb) : verb;
+    if (labelsSeenInState.has(label)) continue;
+    labelsSeenInState.add(label);
     history.set(label, (history.get(label) ?? 0) + 1);
   }
 

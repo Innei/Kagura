@@ -703,6 +703,7 @@ export class SlackRenderer {
     }
 
     const blocks: SlackBlock[] = [];
+    const detail = this.collectRecentProgressDetails(state.loadingMessages, 1).at(0);
 
     const historySummary = formatToolHistorySummary(state.toolHistory);
     if (historySummary) {
@@ -712,13 +713,14 @@ export class SlackRenderer {
       });
     } else {
       const status = state.status?.trim() || DEFAULT_PROGRESS_STATUS;
-      blocks.push({
-        type: 'context',
-        elements: [{ type: 'mrkdwn', text: status }],
-      });
+      if (status !== DEFAULT_PROGRESS_STATUS || !detail) {
+        blocks.push({
+          type: 'context',
+          elements: [{ type: 'mrkdwn', text: status }],
+        });
+      }
     }
 
-    const detail = this.collectRecentProgressDetails(state.loadingMessages, 1).at(0);
     if (detail) {
       blocks.push({
         type: 'context',

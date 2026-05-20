@@ -549,6 +549,38 @@ describe('SlackRenderer.upsertThreadProgressMessage', () => {
       ]),
     );
   });
+
+  it('omits the default progress context when task details are present', async () => {
+    const { client, imagePostCalls } = createClientFixture();
+    const renderer = new SlackRenderer(createTestLogger());
+
+    await renderer.upsertThreadProgressMessage(client, 'C1', 'ts-root', {
+      clear: false,
+      status: 'Working on your request...',
+      taskCardBlocksEnabled: false,
+      tasks: [
+        {
+          type: 'task-update',
+          taskId: 'cmd-1',
+          title: 'pnpm typecheck',
+          status: 'complete',
+          details: '[warn] Ignored unknown option',
+        },
+      ],
+      loadingMessages: ['[warn] Ignored unknown option'],
+      threadTs: 'ts-root',
+    });
+
+    const blocks = imagePostCalls[0]!.blocks as Array<{
+      elements?: Array<{ text?: string }>;
+      type?: string;
+    }>;
+    const contextTexts = blocks
+      .filter((block) => block.type === 'context')
+      .flatMap((block) => block.elements?.map((element) => element.text) ?? []);
+
+    expect(contextTexts).toEqual(['[warn] Ignored unknown option']);
+  });
 });
 
 describe('SlackRenderer.updateThreadReplyWorkspaceContext', () => {

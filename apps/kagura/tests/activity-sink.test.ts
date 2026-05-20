@@ -353,7 +353,7 @@ describe('createActivitySink', () => {
     };
     await sink.onEvent({ type: 'activity-state', state });
 
-    expect(sink.toolHistory.get('Reading')).toBe(2);
+    expect(sink.toolHistory.get('Reading')).toBe(1);
   });
 
   it('publishes task updates through the progress message state', async () => {
