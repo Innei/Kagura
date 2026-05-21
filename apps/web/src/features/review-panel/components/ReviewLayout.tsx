@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ImperativePanelHandle } from 'react-resizable-panels';
-import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
+import type { PanelImperativeHandle } from 'react-resizable-panels';
+import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels';
 
 import { useBreakpoint } from '../../../theme/use-breakpoint';
 import { useColorScheme } from '../../../theme/use-color-scheme';
@@ -62,7 +62,7 @@ export function ReviewLayout({
   const isDesktop = breakpoint === 'desktop';
   const isTablet = breakpoint === 'tablet';
   const isMobile = breakpoint === 'mobile';
-  const sidebarRef = useRef<ImperativePanelHandle>(null);
+  const sidebarRef = useRef<PanelImperativeHandle>(null);
   const filterInputRef = useRef<HTMLInputElement | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [tab, setTab] = useState<SidebarTab>('changes');
@@ -72,6 +72,10 @@ export function ReviewLayout({
   const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode ?? 'diff');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const { defaultLayout, onLayoutChanged } = useDefaultLayout({
+    id: 'kagura-review-panel',
+    panelIds: ['sidebar', 'main'],
+  });
 
   const orderedChangedFiles = useMemo(() => {
     const arr = [...session.changedFiles];
@@ -204,21 +208,22 @@ export function ReviewLayout({
       </a>
       <TitleBar session={session} />
       {isDesktop ? (
-        <PanelGroup
-          autoSaveId="kagura-review-panel"
+        <Group
           className={styles.panels}
-          direction="horizontal"
+          defaultLayout={defaultLayout}
+          id="kagura-review-panel"
+          orientation="horizontal"
+          onLayoutChanged={onLayoutChanged}
         >
           <Panel
             collapsible
             collapsedSize={0}
             defaultSize={16}
+            id="sidebar"
             maxSize={45}
             minSize={16}
-            order={1}
-            ref={sidebarRef}
-            onCollapse={() => setCollapsed(true)}
-            onExpand={() => setCollapsed(false)}
+            panelRef={sidebarRef}
+            onResize={(size) => setCollapsed(size.asPercentage === 0)}
           >
             <Sidebar
               changedFiles={session.changedFiles}
@@ -239,8 +244,8 @@ export function ReviewLayout({
               onSelectPath={onSelectPath}
             />
           </Panel>
-          <PanelResizeHandle aria-label="Resize sidebar" className={styles.resizeHandle} />
-          <Panel minSize={40} order={2}>
+          <Separator aria-label="Resize sidebar" className={styles.resizeHandle} />
+          <Panel id="main" minSize={40}>
             <RightPane
               baseFile={baseFile}
               colorScheme={colorScheme}
@@ -261,7 +266,7 @@ export function ReviewLayout({
               onPrevious={goPrevious}
             />
           </Panel>
-        </PanelGroup>
+        </Group>
       ) : (
         <div className={styles.flatBody}>
           <RightPane

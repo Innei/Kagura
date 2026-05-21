@@ -50,30 +50,30 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json --noEmit"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "0.2.119",
-    "better-sqlite3": "^12.8.0"
+    "@anthropic-ai/claude-agent-sdk": "0.3.145",
+    "better-sqlite3": "^12.10.0"
   },
   "devDependencies": {
-    "@clack/prompts": "^0.11.0",
+    "@clack/prompts": "^1.4.0",
     "@innei/pretty-logger-core": "0.4.2",
     "@kagura/cli": "workspace:*",
-    "@slack/bolt": "4.7.1",
+    "@slack/bolt": "4.7.2",
     "@t3-oss/env-core": "0.13.11",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "25.5.2",
-    "commander": "^13.0.0",
-    "dotenv": "17.4.0",
+    "@types/node": "25.9.1",
+    "commander": "^14.0.3",
+    "dotenv": "17.4.2",
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
     "markdown-to-slack-blocks": "1.5.0",
     "nodemon": "3.1.14",
-    "open": "^10.1.0",
-    "picocolors": "^1.1.0",
-    "tsdown": "0.21.7",
-    "tsx": "4.21.0",
-    "typescript": "^6.0.2",
-    "vitest": "4.1.5",
-    "zod": "4.3.6"
+    "open": "^11.0.0",
+    "picocolors": "^1.1.1",
+    "tsdown": "0.22.0",
+    "tsx": "4.22.3",
+    "typescript": "^6.0.3",
+    "vitest": "4.1.6",
+    "zod": "4.4.3"
   },
   "engines": {
     "node": ">=24.0.0"
