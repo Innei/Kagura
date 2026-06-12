@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+
 import type { ChannelPreferenceStore } from '~/channel-preference/types.js';
 import type { SessionRecord } from '~/session/types.js';
 import type { WorkspaceResolver } from '~/workspace/resolver.js';
@@ -30,28 +32,54 @@ export function resolveWorkspaceForConversation(
     existingSession.workspaceRepoPath &&
     existingSession.workspaceLabel
   ) {
-    const workspaceBranch = resolveWorkspaceBranch(existingSession.workspacePath);
-    return {
-      status: 'unique',
-      workspace: {
-        input: existingSession.workspacePath,
-        matchKind:
-          existingSession.workspacePath === existingSession.workspaceRepoPath ? 'repo' : 'path',
-        repo: {
-          aliases: [],
-          id: existingSession.workspaceRepoId,
-          label: existingSession.workspaceRepoId,
-          name:
-            existingSession.workspaceRepoId.split('/').at(-1) ?? existingSession.workspaceRepoId,
-          repoPath: existingSession.workspaceRepoPath,
-          relativePath: existingSession.workspaceRepoId,
+    if (fs.existsSync(existingSession.workspacePath)) {
+      const workspaceBranch = resolveWorkspaceBranch(existingSession.workspacePath);
+      return {
+        status: 'unique',
+        workspace: {
+          input: existingSession.workspacePath,
+          matchKind:
+            existingSession.workspacePath === existingSession.workspaceRepoPath ? 'repo' : 'path',
+          repo: {
+            aliases: [],
+            id: existingSession.workspaceRepoId,
+            label: existingSession.workspaceRepoId,
+            name:
+              existingSession.workspaceRepoId.split('/').at(-1) ?? existingSession.workspaceRepoId,
+            repoPath: existingSession.workspaceRepoPath,
+            relativePath: existingSession.workspaceRepoId,
+          },
+          source: existingSession.workspaceSource ?? 'manual',
+          ...(workspaceBranch ? { workspaceBranch } : {}),
+          workspaceLabel: existingSession.workspaceLabel,
+          workspacePath: existingSession.workspacePath,
         },
-        source: existingSession.workspaceSource ?? 'manual',
-        ...(workspaceBranch ? { workspaceBranch } : {}),
-        workspaceLabel: existingSession.workspaceLabel,
-        workspacePath: existingSession.workspacePath,
-      },
-    };
+      };
+    }
+
+    if (fs.existsSync(existingSession.workspaceRepoPath)) {
+      const workspaceBranch = resolveWorkspaceBranch(existingSession.workspaceRepoPath);
+      return {
+        status: 'unique',
+        workspace: {
+          input: existingSession.workspaceRepoPath,
+          matchKind: 'repo',
+          repo: {
+            aliases: [],
+            id: existingSession.workspaceRepoId,
+            label: existingSession.workspaceRepoId,
+            name:
+              existingSession.workspaceRepoId.split('/').at(-1) ?? existingSession.workspaceRepoId,
+            repoPath: existingSession.workspaceRepoPath,
+            relativePath: existingSession.workspaceRepoId,
+          },
+          source: existingSession.workspaceSource ?? 'manual',
+          ...(workspaceBranch ? { workspaceBranch } : {}),
+          workspaceLabel: existingSession.workspaceRepoId,
+          workspacePath: existingSession.workspaceRepoPath,
+        },
+      };
+    }
   }
 
   const preference = channelPreferenceStore.get(channelId);

@@ -16,6 +16,7 @@ import type { ThreadExecutionRegistry } from '~/slack/execution/thread-execution
 import {
   acknowledgeAndLog,
   DEFAULT_CONVERSATION_STEPS,
+  ensureThreadWorkspaceStep,
   executeAgent,
   handleStopKeywordStep,
   prepareThreadContext,
@@ -92,7 +93,7 @@ describe('runConversationPipeline', () => {
 
 describe('DEFAULT_CONVERSATION_STEPS', () => {
   it('exports the expected number of steps', () => {
-    expect(DEFAULT_CONVERSATION_STEPS).toHaveLength(7);
+    expect(DEFAULT_CONVERSATION_STEPS).toHaveLength(8);
   });
 
   it('contains only functions', () => {
@@ -552,6 +553,88 @@ describe('resolveWorkspaceStep step', () => {
 
     expect(result.action).toBe('continue');
     expect(ctx.workspace).toEqual(workspace);
+  });
+});
+
+describe('ensureThreadWorkspaceStep step', () => {
+  it('replaces a new thread repo workspace with a dedicated thread worktree', async () => {
+    const ctx = createMinimalPipelineContext();
+    ctx.workspace = {
+      input: '/tmp/repo',
+      matchKind: 'repo',
+      repo: {
+        aliases: [],
+        id: 'r1',
+        label: 'r1',
+        name: 'repo',
+        relativePath: 'r1',
+        repoPath: '/tmp/repo',
+      },
+      source: 'auto',
+      workspaceLabel: 'repo',
+      workspacePath: '/tmp/repo',
+    };
+    ctx.deps.threadWorkspaceManager = {
+      ensureThreadWorkspace: vi.fn().mockReturnValue({
+        ...ctx.workspace,
+        workspaceBranch: 'kagura/r1/C123-ts1',
+        workspacePath: '/tmp/worktrees/r1/C123-ts1',
+      }),
+      prune: vi.fn(),
+    };
+
+    const result = await ensureThreadWorkspaceStep(ctx);
+
+    expect(result.action).toBe('continue');
+    expect(ctx.deps.threadWorkspaceManager.ensureThreadWorkspace).toHaveBeenCalledWith({
+      channelId: 'C123',
+      threadTs: 'ts1',
+      workspace: expect.objectContaining({ workspacePath: '/tmp/repo' }),
+    });
+    expect(ctx.workspace.workspacePath).toBe('/tmp/worktrees/r1/C123-ts1');
+  });
+
+  it('reuses an existing session worktree for resumed turns', async () => {
+    const ctx = createMinimalPipelineContext({
+      sessionStoreRecords: [
+        {
+          channelId: 'C123',
+          createdAt: '',
+          rootMessageTs: 'ts1',
+          threadTs: 'ts1',
+          updatedAt: '',
+          workspaceLabel: 'repo',
+          workspacePath: '/tmp/worktrees/r1/C123-ts1',
+          workspaceRepoId: 'r1',
+          workspaceRepoPath: '/tmp/repo',
+        },
+      ],
+    });
+    ctx.existingSession = ctx.deps.sessionStore.get('ts1');
+    ctx.workspace = {
+      input: '/tmp/worktrees/r1/C123-ts1',
+      matchKind: 'path',
+      repo: {
+        aliases: [],
+        id: 'r1',
+        label: 'r1',
+        name: 'repo',
+        relativePath: 'r1',
+        repoPath: '/tmp/repo',
+      },
+      source: 'auto',
+      workspaceLabel: 'repo',
+      workspacePath: '/tmp/worktrees/r1/C123-ts1',
+    };
+    ctx.deps.threadWorkspaceManager = {
+      ensureThreadWorkspace: vi.fn(),
+      prune: vi.fn(),
+    };
+
+    const result = await ensureThreadWorkspaceStep(ctx);
+
+    expect(result.action).toBe('continue');
+    expect(ctx.deps.threadWorkspaceManager.ensureThreadWorkspace).not.toHaveBeenCalled();
   });
 });
 

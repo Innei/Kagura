@@ -1,3 +1,7 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ChannelPreferenceStore } from '~/channel-preference/types.js';
@@ -24,6 +28,12 @@ function createMockChannelPreferenceStore(value: string | undefined): ChannelPre
     ),
     upsert: vi.fn(),
   };
+}
+
+function createMissingTempPath(prefix: string): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  fs.rmSync(dir, { force: true, recursive: true });
+  return dir;
 }
 
 describe('resolveWorkspaceForConversation', () => {
@@ -60,6 +70,7 @@ describe('resolveWorkspaceForConversation', () => {
   });
 
   it('reconstructs workspace from existing session', () => {
+    const repoPath = fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-resolution-session-'));
     const session: SessionRecord = {
       channelId: 'C123',
       createdAt: new Date().toISOString(),
@@ -67,9 +78,9 @@ describe('resolveWorkspaceForConversation', () => {
       threadTs: 'ts1',
       updatedAt: new Date().toISOString(),
       workspaceLabel: 'my-repo',
-      workspacePath: '/tmp/my-repo',
+      workspacePath: repoPath,
       workspaceRepoId: 'org/my-repo',
-      workspaceRepoPath: '/tmp/my-repo',
+      workspaceRepoPath: repoPath,
     };
     const resolver = { resolveFromText: vi.fn() } as unknown as WorkspaceResolver;
     const preferenceStore = createMockChannelPreferenceStore(undefined);
@@ -83,6 +94,86 @@ describe('resolveWorkspaceForConversation', () => {
     );
 
     expect(result.status).toBe('unique');
+    expect(result.status === 'unique' ? result.workspace.workspacePath : undefined).toBe(repoPath);
+    expect(resolver.resolveFromText).not.toHaveBeenCalled();
+  });
+
+  it('falls back from a stale session worktree to the source repo path', () => {
+    const repoPath = fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-resolution-repo-'));
+    const session: SessionRecord = {
+      channelId: 'C123',
+      createdAt: new Date().toISOString(),
+      rootMessageTs: 'ts1',
+      threadTs: 'ts1',
+      updatedAt: new Date().toISOString(),
+      workspaceLabel: 'my-repo-pr-1',
+      workspacePath: createMissingTempPath('missing-worktree-path-'),
+      workspaceRepoId: 'org/my-repo',
+      workspaceRepoPath: repoPath,
+    };
+    const resolver = { resolveFromText: vi.fn() } as unknown as WorkspaceResolver;
+    const preferenceStore = createMockChannelPreferenceStore(undefined);
+
+    const result = resolveWorkspaceForConversation(
+      'text',
+      session,
+      resolver,
+      preferenceStore,
+      'C123',
+    );
+
+    expect(result.status).toBe('unique');
+    expect(result.status === 'unique' ? result.workspace.workspacePath : undefined).toBe(repoPath);
+    expect(result.status === 'unique' ? result.workspace.matchKind : undefined).toBe('repo');
+    expect(resolver.resolveFromText).not.toHaveBeenCalled();
+  });
+
+  it('ignores a stale session workspace when neither the worktree nor source repo exists', () => {
+    const preferenceResolution: WorkspaceResolution = {
+      status: 'unique',
+      workspace: {
+        input: 'preferred-repo',
+        matchKind: 'repo',
+        repo: {
+          aliases: [],
+          id: 'preferred-repo',
+          label: 'preferred-repo',
+          name: 'preferred-repo',
+          relativePath: 'preferred-repo',
+          repoPath: '/tmp/preferred-repo',
+        },
+        source: 'manual',
+        workspaceLabel: 'preferred-repo',
+        workspacePath: '/tmp/preferred-repo',
+      },
+    };
+    const session: SessionRecord = {
+      channelId: 'C123',
+      createdAt: new Date().toISOString(),
+      rootMessageTs: 'ts1',
+      threadTs: 'ts1',
+      updatedAt: new Date().toISOString(),
+      workspaceLabel: 'my-repo-pr-1',
+      workspacePath: createMissingTempPath('missing-worktree-path-'),
+      workspaceRepoId: 'org/my-repo',
+      workspaceRepoPath: createMissingTempPath('missing-source-repo-path-'),
+    };
+    const resolver = {
+      resolveFromText: vi.fn(),
+      resolveManualInput: vi.fn().mockReturnValue(preferenceResolution),
+    } as unknown as WorkspaceResolver;
+    const preferenceStore = createMockChannelPreferenceStore('preferred-repo');
+
+    const result = resolveWorkspaceForConversation(
+      'text',
+      session,
+      resolver,
+      preferenceStore,
+      'C123',
+    );
+
+    expect(result).toEqual(preferenceResolution);
+    expect(resolver.resolveManualInput).toHaveBeenCalledWith('preferred-repo', 'manual');
     expect(resolver.resolveFromText).not.toHaveBeenCalled();
   });
 

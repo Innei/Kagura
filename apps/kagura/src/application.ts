@@ -44,6 +44,10 @@ import { SlackUserInputBridge } from '~/slack/interaction/user-input-bridge.js';
 import { startSlackAppWithRetry } from '~/slack/network-guard.js';
 import { createReviewPanelServer, type ReviewPanelServer } from '~/web/review-panel.js';
 import { WorkspaceResolver } from '~/workspace/resolver.js';
+import {
+  GitThreadWorkspaceManager,
+  ThreadWorktreeCleanupScheduler,
+} from '~/workspace/thread-worktree.js';
 
 export interface RuntimeApplication {
   dispatchThreadConversation: (input: ConversationDispatchInput) => Promise<void>;
@@ -150,6 +154,18 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
     repoRootDir: env.REPO_ROOT_DIR,
     scanDepth: env.REPO_SCAN_DEPTH,
   });
+  const threadWorkspaceManager = new GitThreadWorkspaceManager({
+    worktreeRootDir: env.WORKTREE_ROOT_DIR,
+  });
+  const threadWorktreeCleanup = env.WORKTREE_CLEANUP_ENABLED
+    ? new ThreadWorktreeCleanupScheduler({
+        intervalMs: env.WORKTREE_CLEANUP_INTERVAL_MS,
+        logger: logger.withTag('worktree:cleanup'),
+        manager: threadWorkspaceManager,
+        retentionMs: env.WORKTREE_CLEANUP_RETENTION_MS,
+        sessionStore,
+      })
+    : undefined;
   const statusProbe = env.SLACK_E2E_ENABLED
     ? new FileSlackStatusProbe(options?.statusProbePath ?? env.SLACK_E2E_STATUS_PROBE_PATH)
     : undefined;
@@ -216,6 +232,7 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
       sessionStore,
       providerRegistry,
       threadExecutionRegistry,
+      threadWorkspaceManager,
       userInputBridge,
       workspaceResolver,
       ...(statusProbe ? { statusProbe } : {}),
@@ -267,6 +284,7 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
         slackAppStarted = true;
       }, logger.withTag('slack:socket'));
       memoryReconciler.start();
+      threadWorktreeCleanup?.start();
       slackApp.startA2ASummaryPoller?.();
       logger.info('Slack Socket Mode application started.');
       void slackApp.recoverPendingExecutions?.().catch((error) => {
@@ -287,6 +305,7 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
         slackAppStarted = false;
       }
       memoryReconciler.stop();
+      threadWorktreeCleanup?.stop();
       await providerRegistry.drain();
       a2aCoordinatorStore.close?.();
       sqlite.close();

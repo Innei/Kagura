@@ -101,6 +101,14 @@ const appConfigSchema = z
     repoRootDir: z.string().optional(),
     repoScanDepth: z.number().int().min(0).optional(),
     worktreeRootDir: z.string().optional(),
+    worktreeCleanup: z
+      .object({
+        enabled: z.boolean().optional(),
+        intervalMs: z.number().int().positive().optional(),
+        retentionMs: z.number().int().positive().optional(),
+      })
+      .strict()
+      .optional(),
     reviewPanel: z
       .object({
         assetsDir: z.string().optional(),
@@ -227,6 +235,9 @@ export const env = createEnv({
     REPO_ROOT_DIR: z.string().min(1),
     REPO_SCAN_DEPTH: z.coerce.number().int().min(0).default(2),
     WORKTREE_ROOT_DIR: z.string().min(1).default(resolveDefaultWorktreeRootDir()),
+    WORKTREE_CLEANUP_ENABLED: booleanStringSchema.default(true),
+    WORKTREE_CLEANUP_INTERVAL_MS: z.coerce.number().int().positive().default(21_600_000),
+    WORKTREE_CLEANUP_RETENTION_MS: z.coerce.number().int().positive().default(604_800_000),
     KAGURA_MEMORY_RECONCILER_ENABLED: booleanStringSchema.default(false),
     KAGURA_MEMORY_RECONCILER_BASE_URL: z.string().url().default('https://api.openai.com/v1'),
     KAGURA_MEMORY_RECONCILER_API_KEY: z.string().min(1).optional(),
@@ -297,6 +308,18 @@ export const env = createEnv({
     REPO_ROOT_DIR: envOrConfig('REPO_ROOT_DIR', configString(appConfig.repoRootDir)),
     REPO_SCAN_DEPTH: envOrConfig('REPO_SCAN_DEPTH', configNumber(appConfig.repoScanDepth)),
     WORKTREE_ROOT_DIR: envOrConfig('WORKTREE_ROOT_DIR', configString(appConfig.worktreeRootDir)),
+    WORKTREE_CLEANUP_ENABLED: envOrConfig(
+      'WORKTREE_CLEANUP_ENABLED',
+      configBoolean(appConfig.worktreeCleanup?.enabled),
+    ),
+    WORKTREE_CLEANUP_INTERVAL_MS: envOrConfig(
+      'WORKTREE_CLEANUP_INTERVAL_MS',
+      configNumber(appConfig.worktreeCleanup?.intervalMs),
+    ),
+    WORKTREE_CLEANUP_RETENTION_MS: envOrConfig(
+      'WORKTREE_CLEANUP_RETENTION_MS',
+      configNumber(appConfig.worktreeCleanup?.retentionMs),
+    ),
     KAGURA_MEMORY_RECONCILER_ENABLED: envOrConfig(
       'KAGURA_MEMORY_RECONCILER_ENABLED',
       configBoolean(appConfig.memory?.reconciler?.enabled),

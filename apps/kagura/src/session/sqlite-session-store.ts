@@ -23,6 +23,14 @@ export class SqliteSessionStore implements SessionStore {
     return this.rowToRecord(row);
   }
 
+  listAll(): SessionRecord[] {
+    return this.db
+      .select()
+      .from(sessions)
+      .all()
+      .map((row) => this.rowToRecord(row));
+  }
+
   upsert(record: SessionRecord): SessionRecord {
     this.db
       .insert(sessions)

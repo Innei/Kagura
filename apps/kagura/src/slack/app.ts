@@ -11,6 +11,7 @@ import type { MemoryStore } from '~/memory/types.js';
 import type { ReviewSessionStore } from '~/review/types.js';
 import type { SessionStore } from '~/session/types.js';
 import type { WorkspaceResolver } from '~/workspace/resolver.js';
+import type { ThreadWorkspaceManager } from '~/workspace/thread-worktree.js';
 
 import { registerSlashCommands } from './commands/register.js';
 import { SlackThreadContextLoader } from './context/thread-context-loader.js';
@@ -77,6 +78,7 @@ export interface SlackApplicationDependencies {
   sessionStore: SessionStore;
   statusProbe?: SlackStatusProbe;
   threadExecutionRegistry: ThreadExecutionRegistry;
+  threadWorkspaceManager?: ThreadWorkspaceManager | undefined;
   userInputBridge: SlackUserInputBridge;
   workspaceResolver: WorkspaceResolver;
 }
@@ -140,6 +142,7 @@ export function createSlackApp(
     reviewPanelBaseUrl: deps.reviewPanelBaseUrl,
     reviewSessionStore: deps.reviewSessionStore,
     threadExecutionRegistry: deps.threadExecutionRegistry,
+    threadWorkspaceManager: deps.threadWorkspaceManager,
     userInputBridge: deps.userInputBridge,
     workspaceResolver: deps.workspaceResolver,
   };

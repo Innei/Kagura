@@ -8,6 +8,7 @@ import type { ContextMemories, MemoryStore } from '~/memory/types.js';
 import type { ReviewSessionStore } from '~/review/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
 import type { WorkspaceResolver } from '~/workspace/resolver.js';
+import type { ThreadWorkspaceManager } from '~/workspace/thread-worktree.js';
 import type { ResolvedWorkspace } from '~/workspace/types.js';
 
 import type {
@@ -45,6 +46,7 @@ export interface SlackIngressDependencies {
   sessionStore: SessionStore;
   threadContextLoader: SlackThreadContextLoader;
   threadExecutionRegistry: ThreadExecutionRegistry;
+  threadWorkspaceManager?: ThreadWorkspaceManager | undefined;
   userInputBridge: SlackUserInputBridge;
   workspaceResolver: WorkspaceResolver;
 }
