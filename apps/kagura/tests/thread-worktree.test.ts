@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import os, { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -82,6 +82,27 @@ describe('GitThreadWorkspaceManager', () => {
     expect(second.workspacePath).toBe(workspace.workspacePath);
 
     rmSync(worktreeRootDir, { force: true, recursive: true });
+  });
+
+  it('expands home directory in the configured worktree root', () => {
+    const repoPath = createGitRepo();
+    const relativeRoot = `~/kagura-thread-worktree-test-${Date.now()}`;
+    const expectedRoot = path.join(os.homedir(), relativeRoot.slice(2));
+    rmSync(expectedRoot, { force: true, recursive: true });
+    const manager = new GitThreadWorkspaceManager({ worktreeRootDir: relativeRoot });
+
+    const workspace = manager.ensureThreadWorkspace({
+      channelId: 'CHOME',
+      threadTs: 'home-thread',
+      workspace: createWorkspace(repoPath),
+    });
+
+    expect(workspace.workspacePath).toBe(
+      path.join(expectedRoot, 'org-my-repo', 'CHOME-home-thread'),
+    );
+    expect(workspace.workspacePath).not.toContain(`${process.cwd()}${path.sep}~`);
+
+    rmSync(expectedRoot, { force: true, recursive: true });
   });
 
   it('preserves a resolved subdirectory inside the thread worktree', () => {

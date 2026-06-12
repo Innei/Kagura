@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 import type { AppLogger } from '~/logger/index.js';
@@ -57,7 +58,7 @@ export class GitThreadWorkspaceManager implements ThreadWorkspaceManager {
   private readonly worktreeRootDir: string;
 
   constructor(options: GitThreadWorkspaceManagerOptions) {
-    this.worktreeRootDir = path.resolve(options.worktreeRootDir);
+    this.worktreeRootDir = path.resolve(expandHomeDirectory(options.worktreeRootDir));
   }
 
   ensureThreadWorkspace(input: EnsureThreadWorkspaceInput): ResolvedWorkspace {
@@ -284,6 +285,16 @@ function normalizeRelativeWorkspacePath(relativePath: string): string | undefine
     return undefined;
   }
   return relativePath;
+}
+
+function expandHomeDirectory(value: string): string {
+  if (value === '~') {
+    return os.homedir();
+  }
+  if (value.startsWith(`~${path.sep}`)) {
+    return path.join(os.homedir(), value.slice(2));
+  }
+  return value;
 }
 
 function isUsableGitWorktree(worktreePath: string): boolean {
