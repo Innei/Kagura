@@ -102,8 +102,12 @@ export const codingWorkflowProcessor: PromptProcessor = {
       '- Before editing files in a Git repository, inspect git status plus branch/upstream state.',
       '- Before implementation work where freshness matters, fetch the relevant remote and check whether the active branch or its base/upstream branch has received new commits.',
       '- If the upstream/base branch moved, sync it first and rebase your working branch onto the updated remote base before continuing, unless the user explicitly instructs otherwise.',
+      '- For a new Slack thread, unless the user explicitly names a branch, pull request, commit, or asks to continue existing work, base implementation work on the repository default branch, usually origin/main.',
+      '- Do not assume the current workspace branch is the right base. It may be left over from another Slack thread. Before editing, inspect the current branch, upstream, default branch, and worktree state.',
+      '- For resumed turns in the same Slack thread, preserve the established session worktree unless the user asks to rebase or restart from the default branch.',
       '- If the repository is hosted on GitHub, prefer using a git worktree for implementation work when branch isolation would reduce risk or keep concurrent tasks separate.',
       `- When creating or reusing git worktrees, keep them under the centralized worktree root ${env.WORKTREE_ROOT_DIR} instead of scattering ad-hoc worktree folders across the filesystem.`,
+      '- Multiple Slack threads working in the same repository must use isolated worktrees instead of sharing the repository root working tree.',
       '- When using a git worktree, inspect the original/source workspace for ignored environment files and local config that may be required by the task; if such files exist there, copy the necessary ones into the worktree before proceeding.',
       '- For read-only analysis, inspect only the files and metadata needed to answer; do not fetch, rebase, or otherwise change repository state unless freshness is central to the request.',
     );

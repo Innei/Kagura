@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 
 import type { AgentExecutionEvent, AgentExecutor } from '~/agent/types.js';
-import { appRuntimeConfig } from '~/env/server.js';
+import { appRuntimeConfig, env } from '~/env/server.js';
 import { redact } from '~/logger/redact.js';
 import { runtimeError, runtimeInfo, runtimeWarn } from '~/logger/runtime.js';
 import {
@@ -13,6 +13,7 @@ import {
 import type { SessionRecord } from '~/session/types.js';
 import { formatClaudeExecutionFailureReply } from '~/util/error-detail.js';
 import { enrichResolvedWorkspace } from '~/workspace/resolver.js';
+import { GitThreadWorkspaceManager } from '~/workspace/thread-worktree.js';
 
 import type { ThreadExecutionStopReason } from '../execution/thread-execution-registry.js';
 import type { SlackWebClientLike } from '../types.js';
@@ -235,6 +236,58 @@ export async function resolveWorkspaceStep(
       'No workspace detected for thread %s — proceeding without workspace (%s)',
       threadTs,
       workspaceResolution.reason,
+    );
+  }
+
+  return CONTINUE;
+}
+
+let defaultThreadWorkspaceManager: GitThreadWorkspaceManager | undefined;
+
+function getThreadWorkspaceManager(ctx: ConversationPipelineContext) {
+  if (ctx.deps.threadWorkspaceManager) {
+    return ctx.deps.threadWorkspaceManager;
+  }
+
+  defaultThreadWorkspaceManager ??= new GitThreadWorkspaceManager({
+    worktreeRootDir: env.WORKTREE_ROOT_DIR,
+  });
+  return defaultThreadWorkspaceManager;
+}
+
+export async function ensureThreadWorkspaceStep(
+  ctx: ConversationPipelineContext,
+): Promise<PipelineStepResult> {
+  const { workspace } = ctx;
+  if (!workspace) {
+    return CONTINUE;
+  }
+
+  const existingWorkspacePath = ctx.existingSession?.workspacePath;
+  const existingWorkspaceStillResolved =
+    existingWorkspacePath &&
+    existingWorkspacePath === workspace.workspacePath &&
+    workspace.workspacePath !== workspace.repo.repoPath;
+
+  if (existingWorkspaceStillResolved && ctx.options.forceNewSession !== true) {
+    return CONTINUE;
+  }
+
+  try {
+    const nextWorkspace = getThreadWorkspaceManager(ctx).ensureThreadWorkspace({
+      channelId: ctx.message.channel,
+      threadTs: ctx.threadTs,
+      workspace,
+    });
+    ctx.workspace = enrichResolvedWorkspace(nextWorkspace);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    runtimeWarn(
+      ctx.deps.logger,
+      'Failed to ensure thread worktree for thread %s workspace %s: %s',
+      ctx.threadTs,
+      workspace.workspaceLabel,
+      redact(message),
     );
   }
 
@@ -699,6 +752,7 @@ export const DEFAULT_CONVERSATION_STEPS: PipelineStep[] = [
   handleStopKeywordStep,
   stopActiveExecutionsStep,
   resolveWorkspaceStep,
+  ensureThreadWorkspaceStep,
   resolveSessionStep,
   prepareThreadContext,
   executeAgent,
