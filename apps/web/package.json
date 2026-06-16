@@ -24,7 +24,7 @@
     "react-resizable-panels": "^4.11.1",
     "shiki": "^4.1.0",
     "typescript": "^6.0.3",
-    "vite": "8.0.13",
+    "vite": "8.0.16",
     "wouter": "^3.9.0"
   },
   "devDependencies": {
