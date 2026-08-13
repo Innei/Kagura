@@ -550,6 +550,40 @@ describe('SlackRenderer.upsertThreadProgressMessage', () => {
     );
   });
 
+  it('deduplicates identical task status and detail without Slack task cards', async () => {
+    const { client, imagePostCalls } = createClientFixture();
+    const renderer = new SlackRenderer(createTestLogger());
+
+    await renderer.upsertThreadProgressMessage(client, 'C1', 'ts-root', {
+      clear: false,
+      status: 'bun run .agents/skills/sync-submodule/scripts/run.ts',
+      taskCardBlocksEnabled: false,
+      tasks: [
+        {
+          type: 'task-update',
+          taskId: 'cmd-1',
+          title: 'bun run .agents/skills/sync-submodule/scripts/run.ts',
+          status: 'in_progress',
+        },
+      ],
+      loadingMessages: ['bun run .agents/skills/sync-submodule/scripts/run.ts'],
+      threadTs: 'ts-root',
+    });
+
+    expect(imagePostCalls).toHaveLength(1);
+    expect(imagePostCalls[0]!.blocks).toEqual([
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: 'bun run .agents/skills/sync-submodule/scripts/run.ts',
+          },
+        ],
+      },
+    ]);
+  });
+
   it('omits the default progress context when task details are present', async () => {
     const { client, imagePostCalls } = createClientFixture();
     const renderer = new SlackRenderer(createTestLogger());
