@@ -252,6 +252,7 @@ export class CodexCliExecutor implements AgentExecutor {
           PATH: prependPath(runtimeDir, process.env.PATH),
         },
         stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true,
       });
 
       abortCleanup = this.attachAbortHandler(child, request.abortSignal);

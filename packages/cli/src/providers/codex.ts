@@ -12,6 +12,7 @@ export const codexProvider: ProviderSetup = {
       const out = execFileSync('codex', ['--version'], {
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'ignore'],
+        windowsHide: true,
       });
       return { status: 'ready', detail: out.trim() };
     } catch {

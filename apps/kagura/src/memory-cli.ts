@@ -25,7 +25,7 @@ program
   .option('--limit <n>', 'max records', '10')
   .action((opts) => {
     const limit = Math.max(1, Math.min(50, Number(opts.limit) || 10));
-    const { db, sqlite } = createDatabase(opts.db);
+    const { db, sqlite } = createDatabase(opts.db, { migrate: true });
 
     try {
       const nowIso = new Date().toISOString();
@@ -79,7 +79,7 @@ program
       process.exit(2);
     }
 
-    const { db, sqlite } = createDatabase(opts.db);
+    const { db, sqlite } = createDatabase(opts.db, { migrate: true });
     const id = randomUUID();
     const createdAt = new Date().toISOString();
 

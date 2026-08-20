@@ -392,6 +392,7 @@ function runGit(cwd: string, args: string[]): string {
       maxBuffer: 20 * 1024 * 1024,
       timeout: 10_000,
       stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
     }).trimEnd();
   } catch {
     return '';
@@ -403,6 +404,7 @@ function readGitBlobBuffer(cwd: string, ref: string, filePath: string): Buffer |
     return execFileSync('git', ['-C', cwd, 'show', `${ref}:${filePath}`], {
       maxBuffer: 20 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
     });
   } catch {
     return undefined;

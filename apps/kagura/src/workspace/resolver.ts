@@ -332,6 +332,7 @@ export function resolveWorkspaceBranch(workspacePath: string): string | undefine
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'ignore'],
         timeout: 1500,
+        windowsHide: true,
       })
       .trim();
 
@@ -418,6 +419,7 @@ function resolveWorkspacePullRequest(
         stdio: ['ignore', 'pipe', 'ignore'],
         cwd: workspacePath,
         timeout: 2500,
+        windowsHide: true,
       },
     );
     const parsed = JSON.parse(raw) as Array<{ number?: number; url?: string }>;

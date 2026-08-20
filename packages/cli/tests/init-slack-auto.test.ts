@@ -34,6 +34,7 @@ function makePaths(dir: string) {
     dataDir: path.join(dir, 'data'),
     dbPath: path.join(dir, 'data', 'sessions.db'),
     logDir: path.join(dir, 'logs'),
+    pidFile: path.join(dir, 'data', 'kagura.pid'),
     tokenStore: path.join(dir, 'data', 'slack-config-tokens.json'),
   };
 }

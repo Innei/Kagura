@@ -576,6 +576,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
       const currentHead = execFileSync('git', ['-C', cwd, 'rev-parse', 'HEAD'], {
         encoding: 'utf8',
         timeout: 5_000,
+        windowsHide: true,
       }).trim();
       if (currentHead !== initialGitHead) return true; // new commits
     } catch {
@@ -585,6 +586,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
       const status = execFileSync('git', ['-C', cwd, 'status', '--porcelain'], {
         encoding: 'utf8',
         timeout: 5_000,
+        windowsHide: true,
       }).trim();
       if (status !== initialGitStatus) return true; // uncommitted changes differ
     } catch {

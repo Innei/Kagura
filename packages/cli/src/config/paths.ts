@@ -9,6 +9,7 @@ export interface KaguraPaths {
   dbPath: string;
   envFile: string;
   logDir: string;
+  pidFile: string;
   tokenStore: string;
 }
 
@@ -61,6 +62,7 @@ function buildPaths(configDir: string): KaguraPaths {
     dataDir: path.join(configDir, 'data'),
     dbPath: path.join(configDir, 'data', 'sessions.db'),
     logDir: path.join(configDir, 'logs'),
+    pidFile: path.join(configDir, 'data', 'kagura.pid'),
     tokenStore: path.join(configDir, 'data', 'slack-config-tokens.json'),
   };
 }

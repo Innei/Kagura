@@ -395,6 +395,7 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
         execFileSync('git', ['-C', workspacePath, 'status', '--porcelain'], {
           encoding: 'utf8',
           timeout: 5_000,
+          windowsHide: true,
         }).trim() || undefined;
     } catch {
       // not a git repo or git unavailable
