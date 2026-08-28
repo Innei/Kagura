@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { statSync } from 'node:fs';
 
 import type {
   AgentActivityState,
@@ -937,7 +938,7 @@ function readReviewableGitStatus(
     ).trim();
     const untracked = execFileSync(
       'git',
-      ['-C', workspacePath, 'ls-files', '--others', '--exclude-standard'],
+      ['-C', workspacePath, 'ls-files', '--others', '--exclude-standard', '--no-empty-directory'],
       {
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'ignore'],
@@ -947,11 +948,20 @@ function readReviewableGitStatus(
       .trim()
       .split('\n')
       .filter(Boolean)
+      .filter((filePath) => isReviewableWorkspaceFile(workspacePath, filePath))
       .map((filePath) => `??\t${filePath}`)
       .join('\n');
     return [tracked, untracked].filter(Boolean).join('\n');
   } catch {
     return undefined;
+  }
+}
+
+function isReviewableWorkspaceFile(workspacePath: string, filePath: string): boolean {
+  try {
+    return statSync(`${workspacePath}/${filePath}`).isFile();
+  } catch {
+    return false;
   }
 }
 

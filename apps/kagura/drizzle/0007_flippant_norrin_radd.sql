@@ -1,0 +1,1 @@
+ALTER TABLE `sessions` ADD `agent_reasoning_effort` text;

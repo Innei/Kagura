@@ -504,32 +504,35 @@ describe('stopActiveExecutionsStep', () => {
 });
 
 describe('parseInlineModelDirectiveStep', () => {
-  it('captures a leading --model directive and strips it from the trigger text', async () => {
+  it('captures leading session directives and strips them from the trigger text', async () => {
     const ctx = createMinimalPipelineContext();
-    ctx.message.text = '<@U_BOT> --model gpt-5.5 fix the flaky test';
+    ctx.message.text = '<@U_BOT> --model gpt-5.5 --effort high fix the flaky test';
 
     const result = await parseInlineModelDirectiveStep(ctx);
 
     expect(result.action).toBe('continue');
     expect(ctx.inlineModelOverride).toBe('gpt-5.5');
+    expect(ctx.inlineReasoningEffortOverride).toBe('high');
     expect(ctx.message.text).toBe('<@U_BOT> fix the flaky test');
   });
 
-  it('supports --model=value and model:value forms', async () => {
+  it('supports --model=value/model:value and --effort=value/effort:value forms', async () => {
     const equalsCtx = createMinimalPipelineContext();
-    equalsCtx.message.text = '<@U_BOT> --model=openai/gpt-5 inspect this';
+    equalsCtx.message.text = '<@U_BOT> --model=openai/gpt-5 --effort=xhigh inspect this';
 
     await parseInlineModelDirectiveStep(equalsCtx);
 
     expect(equalsCtx.inlineModelOverride).toBe('openai/gpt-5');
+    expect(equalsCtx.inlineReasoningEffortOverride).toBe('xhigh');
     expect(equalsCtx.message.text).toBe('<@U_BOT> inspect this');
 
     const colonCtx = createMinimalPipelineContext();
-    colonCtx.message.text = '<@U_BOT> model:claude-sonnet-4 continue';
+    colonCtx.message.text = '<@U_BOT> effort:low model:claude-sonnet-4 continue';
 
     await parseInlineModelDirectiveStep(colonCtx);
 
     expect(colonCtx.inlineModelOverride).toBe('claude-sonnet-4');
+    expect(colonCtx.inlineReasoningEffortOverride).toBe('low');
     expect(colonCtx.message.text).toBe('<@U_BOT> continue');
   });
 
@@ -547,12 +550,13 @@ describe('parseInlineModelDirectiveStep', () => {
       ],
     });
     ctx.existingSession = ctx.deps.sessionStore.get('ts1');
-    ctx.message.text = '<@U_BOT> --model gpt-5.5 continue';
+    ctx.message.text = '<@U_BOT> --model gpt-5.5 --effort high continue';
 
     await parseInlineModelDirectiveStep(ctx);
 
     expect(ctx.inlineModelOverride).toBeUndefined();
-    expect(ctx.message.text).toBe('<@U_BOT> --model gpt-5.5 continue');
+    expect(ctx.inlineReasoningEffortOverride).toBeUndefined();
+    expect(ctx.message.text).toBe('<@U_BOT> --model gpt-5.5 --effort high continue');
   });
 
   it('applies inline directives when the message explicitly starts a new provider session', async () => {
@@ -570,11 +574,12 @@ describe('parseInlineModelDirectiveStep', () => {
     });
     ctx.existingSession = ctx.deps.sessionStore.get('ts1');
     ctx.options.forceNewSession = true;
-    ctx.message.text = '<@U_BOT> --model gpt-5.5 start over';
+    ctx.message.text = '<@U_BOT> --model gpt-5.5 --effort medium start over';
 
     await parseInlineModelDirectiveStep(ctx);
 
     expect(ctx.inlineModelOverride).toBe('gpt-5.5');
+    expect(ctx.inlineReasoningEffortOverride).toBe('medium');
     expect(ctx.message.text).toBe('<@U_BOT> start over');
   });
 });
@@ -735,13 +740,15 @@ describe('resolveSessionStep step', () => {
   it('persists an inline model override on the thread session', async () => {
     const ctx = createMinimalPipelineContext();
     ctx.inlineModelOverride = 'gpt-5.5';
+    ctx.inlineReasoningEffortOverride = 'high';
 
     await resolveSessionStep(ctx);
 
     expect(ctx.existingSession?.agentModel).toBe('gpt-5.5');
+    expect(ctx.existingSession?.agentReasoningEffort).toBe('high');
     expect(ctx.deps.sessionStore.patch).toHaveBeenCalledWith(
       'ts1',
-      expect.objectContaining({ agentModel: 'gpt-5.5' }),
+      expect.objectContaining({ agentModel: 'gpt-5.5', agentReasoningEffort: 'high' }),
     );
   });
 });
@@ -760,6 +767,7 @@ describe('prepareThreadContext step', () => {
   it('strips an applied inline model directive from the loaded current thread message', async () => {
     const ctx = createMinimalPipelineContext();
     ctx.inlineModelOverride = 'gpt-5.5';
+    ctx.inlineReasoningEffortOverride = 'high';
     ctx.message.text = '<@U_BOT> fix the flaky test';
     vi.mocked(ctx.deps.threadContextLoader.loadThread).mockResolvedValueOnce({
       channelId: 'C123',
@@ -770,8 +778,8 @@ describe('prepareThreadContext step', () => {
           authorId: 'U123',
           files: [],
           images: [],
-          rawText: '<@U_BOT> --model gpt-5.5 fix the flaky test',
-          text: '<@U_BOT> --model gpt-5.5 fix the flaky test',
+          rawText: '<@U_BOT> --model gpt-5.5 --effort high fix the flaky test',
+          text: '<@U_BOT> --model gpt-5.5 --effort high fix the flaky test',
           threadTs: 'ts1',
           ts: 'ts1',
         },
@@ -787,6 +795,7 @@ describe('prepareThreadContext step', () => {
     expect(ctx.threadContext?.messages[0]?.text).toBe('<@U_BOT> fix the flaky test');
     expect(ctx.threadContext?.renderedPrompt).toContain('<@U_BOT> fix the flaky test');
     expect(ctx.threadContext?.renderedPrompt).not.toContain('--model');
+    expect(ctx.threadContext?.renderedPrompt).not.toContain('--effort');
   });
 });
 
@@ -866,6 +875,7 @@ describe('executeAgent step', () => {
         workspacePath: worktreePath,
         workspaceRepoId: 'innei-repo/slack-cc-bot',
       });
+      writeFileSync(path.join(worktreePath, 'README.md'), 'fixture\nchanged in worktree\n');
       await sink.onEvent({ type: 'lifecycle', phase: 'completed' });
     });
     await prepareThreadContext(ctx);
@@ -894,6 +904,10 @@ describe('executeAgent step', () => {
       expect.any(String),
       'completed',
       expect.objectContaining({
+        changedFilesSnapshot: JSON.stringify([
+          { path: 'README.md', status: 'M', additions: 1, deletions: 0 },
+        ]),
+        diffSnapshot: expect.stringContaining('+changed in worktree'),
         head: execFileSync('git', ['-C', worktreePath, 'rev-parse', 'HEAD'], {
           encoding: 'utf8',
         }).trim(),
@@ -1082,6 +1096,7 @@ describe('executeAgent step', () => {
       sessionStoreRecords: [
         {
           agentModel: 'gpt-5.5',
+          agentReasoningEffort: 'high',
           channelId: 'C123',
           createdAt: '',
           rootMessageTs: 'ts1',
@@ -1100,6 +1115,7 @@ describe('executeAgent step', () => {
       expect.objectContaining({
         mentionText: '<@U_BOT> fix the flaky test',
         modelOverride: 'gpt-5.5',
+        reasoningEffortOverride: 'high',
       }),
       expect.anything(),
     );

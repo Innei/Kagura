@@ -90,6 +90,7 @@ export interface ConversationPipelineContext {
   deps: SlackIngressDependencies;
   existingSession?: SessionRecord | undefined;
   inlineModelOverride?: string | undefined;
+  inlineReasoningEffortOverride?: SessionRecord['agentReasoningEffort'] | undefined;
   message: ThreadConversationMessage;
 
   options: ThreadConversationOptions;

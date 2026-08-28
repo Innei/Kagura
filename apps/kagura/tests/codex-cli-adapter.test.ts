@@ -348,6 +348,32 @@ describe('CodexCliExecutor', () => {
     );
   });
 
+  it('passes a request-scoped reasoning effort override to Codex CLI', async () => {
+    spawnMock.mockImplementation(
+      () =>
+        new FakeCodexProcess((_prompt, child) => {
+          queueMicrotask(() => {
+            writeJson(child, { type: 'thread.started', thread_id: 'codex-thread-1' });
+            writeJson(child, { type: 'turn.completed', usage: {} });
+            child.stdout.end();
+            child.stderr.end();
+            child.emit('exit', 0, null);
+          });
+        }),
+    );
+
+    await new CodexCliExecutor(createLogger()).execute(
+      createRequest({ reasoningEffortOverride: 'high' }),
+      createSink([]),
+    );
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'codex',
+      expect.arrayContaining(['-c', 'model_reasoning_effort="high"']),
+      expect.any(Object),
+    );
+  });
+
   it('retries without resume when Codex no longer has the saved rollout', async () => {
     spawnMock
       .mockImplementationOnce(

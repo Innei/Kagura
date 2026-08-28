@@ -228,8 +228,10 @@ function getChangedFiles(session: ReviewSessionRecord): ReviewChangedFile[] {
     'ls-files',
     '--others',
     '--exclude-standard',
+    '--no-empty-directory',
   ]).split('\n')) {
     if (!filePath || seen.has(filePath)) continue;
+    if (!isReviewableWorkspaceFile(session.workspacePath, filePath)) continue;
     changed.push({ path: filePath, status: '??' });
     seen.add(filePath);
   }
@@ -336,6 +338,15 @@ function countUntrackedAdditions(workspacePath: string, filePath: string): numbe
     return lines.length;
   } catch {
     return 0;
+  }
+}
+
+function isReviewableWorkspaceFile(workspacePath: string, filePath: string): boolean {
+  try {
+    const absolutePath = path.resolve(workspacePath, filePath);
+    return fsSync.statSync(absolutePath).isFile();
+  } catch {
+    return false;
   }
 }
 

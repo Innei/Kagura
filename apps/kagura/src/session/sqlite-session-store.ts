@@ -43,6 +43,7 @@ export class SqliteSessionStore implements SessionStore {
         providerSessionId: record.providerSessionId ?? null,
         agentProvider: record.agentProvider ?? null,
         agentModel: record.agentModel ?? null,
+        agentReasoningEffort: record.agentReasoningEffort ?? null,
         conversationMode: record.conversationMode ?? null,
         a2aLead: record.a2aLead ?? null,
         a2aTeamId: record.a2aTeamId ?? null,
@@ -68,6 +69,7 @@ export class SqliteSessionStore implements SessionStore {
           providerSessionId: record.providerSessionId ?? null,
           agentProvider: record.agentProvider ?? null,
           agentModel: record.agentModel ?? null,
+          agentReasoningEffort: record.agentReasoningEffort ?? null,
           conversationMode: record.conversationMode ?? null,
           a2aLead: record.a2aLead ?? null,
           a2aTeamId: record.a2aTeamId ?? null,
@@ -113,6 +115,7 @@ export class SqliteSessionStore implements SessionStore {
         providerSessionId: next.providerSessionId ?? null,
         agentProvider: next.agentProvider ?? null,
         agentModel: next.agentModel ?? null,
+        agentReasoningEffort: next.agentReasoningEffort ?? null,
         conversationMode: next.conversationMode ?? null,
         a2aLead: next.a2aLead ?? null,
         a2aTeamId: next.a2aTeamId ?? null,
@@ -161,6 +164,9 @@ export class SqliteSessionStore implements SessionStore {
     if (row.workspaceSource !== null) record.workspaceSource = row.workspaceSource;
     if (row.agentProvider !== null) record.agentProvider = row.agentProvider;
     if (row.agentModel !== null) record.agentModel = row.agentModel;
+    if (row.agentReasoningEffort !== null) {
+      record.agentReasoningEffort = row.agentReasoningEffort;
+    }
     if (row.lastTurnTriggerTs !== null) record.lastTurnTriggerTs = row.lastTurnTriggerTs;
     return record;
   }

@@ -426,8 +426,9 @@ export class CodexCliExecutor implements AgentExecutor {
   private buildArgs(request: AgentExecutionRequest): string[] {
     const model = request.modelOverride ?? env.CODEX_MODEL;
     const modelArgs = model ? ['--model', model] : [];
-    const reasoningArgs = env.CODEX_REASONING_EFFORT
-      ? ['-c', `model_reasoning_effort="${env.CODEX_REASONING_EFFORT}"`]
+    const reasoningEffort = request.reasoningEffortOverride ?? env.CODEX_REASONING_EFFORT;
+    const reasoningArgs = reasoningEffort
+      ? ['-c', `model_reasoning_effort="${reasoningEffort}"`]
       : [];
     const execArgs = [
       '--json',

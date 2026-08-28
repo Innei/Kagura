@@ -10,6 +10,9 @@ export const sessions = sqliteTable('sessions', {
   providerSessionId: text('claude_session_id'),
   agentProvider: text('agent_provider'),
   agentModel: text('agent_model'),
+  agentReasoningEffort: text('agent_reasoning_effort', {
+    enum: ['low', 'medium', 'high', 'xhigh'],
+  }),
   conversationMode: text('conversation_mode', { enum: ['general', 'a2a'] }),
   a2aLead: text('a2a_lead'),
   a2aTeamId: text('a2a_team_id'),

@@ -1,4 +1,5 @@
 import type { ContextMemories } from '~/memory/types.js';
+import type { SessionReasoningEffort } from '~/session/types.js';
 import type { NormalizedThreadContext } from '~/slack/context/thread-context-loader.js';
 
 export interface GeneratedOutputFile {
@@ -35,6 +36,7 @@ export interface AgentExecutionRequest {
   mentionText: string;
   modelOverride?: string;
   previousTurnTriggerTs?: string;
+  reasoningEffortOverride?: SessionReasoningEffort;
   resumeHandle?: string;
   threadContext: NormalizedThreadContext;
   threadTs: string;

@@ -10,6 +10,7 @@ import {
   resolveGitBranch,
   resolveGitHead,
 } from '~/review/git-review-service.js';
+import type { ReviewSessionRecord } from '~/review/types.js';
 import type { SessionRecord } from '~/session/types.js';
 import { formatClaudeExecutionFailureReply } from '~/util/error-detail.js';
 import { enrichResolvedWorkspace } from '~/workspace/resolver.js';
@@ -19,7 +20,7 @@ import { renderThreadPrompt } from '../context/thread-context-loader.js';
 import type { ThreadExecutionStopReason } from '../execution/thread-execution-registry.js';
 import type { SlackWebClientLike } from '../types.js';
 import { type ActivitySink, createActivitySink } from './activity-sink.js';
-import { extractLeadingModelDirective } from './model-directive.js';
+import { extractLeadingSessionDirectives } from './model-directive.js';
 import { getA2AContextFromSession, serializeA2AParticipants } from './scenarios/a2a/routing.js';
 import { resolveAndPersistSession } from './session-manager.js';
 import type {
@@ -199,7 +200,7 @@ export async function stopActiveExecutionsStep(
 export async function parseInlineModelDirectiveStep(
   ctx: ConversationPipelineContext,
 ): Promise<PipelineStepResult> {
-  const parsed = extractLeadingModelDirective(ctx.message.text);
+  const parsed = extractLeadingSessionDirectives(ctx.message.text);
   if (!parsed) {
     return CONTINUE;
   }
@@ -208,13 +209,19 @@ export async function parseInlineModelDirectiveStep(
     return CONTINUE;
   }
 
-  ctx.inlineModelOverride = parsed.model;
+  if (parsed.model) {
+    ctx.inlineModelOverride = parsed.model;
+  }
+  if (parsed.reasoningEffort) {
+    ctx.inlineReasoningEffortOverride = parsed.reasoningEffort;
+  }
   ctx.message.text = parsed.text;
   runtimeInfo(
     ctx.deps.logger,
-    'Inline model directive detected for new provider session in thread %s: %s',
+    'Inline session directive detected for new provider session in thread %s: model=%s effort=%s',
     ctx.threadTs,
-    parsed.model,
+    parsed.model ?? '(unchanged)',
+    parsed.reasoningEffort ?? '(unchanged)',
   );
 
   return CONTINUE;
@@ -348,6 +355,9 @@ export async function resolveSessionStep(
     ...a2aFields,
     ...(options.agentProviderOverride ? { agentProvider: options.agentProviderOverride } : {}),
     ...(ctx.inlineModelOverride ? { agentModel: ctx.inlineModelOverride } : {}),
+    ...(ctx.inlineReasoningEffortOverride
+      ? { agentReasoningEffort: ctx.inlineReasoningEffortOverride }
+      : {}),
     lastTurnTriggerTs: message.ts,
   });
   ctx.existingSession = deps.sessionStore.get(threadTs) ?? ctx.existingSession;
@@ -366,7 +376,7 @@ export async function prepareThreadContext(
 
   runtimeInfo(deps.logger, 'Loading thread context for %s', threadTs);
   ctx.threadContext = await deps.threadContextLoader.loadThread(client, message.channel, threadTs);
-  if (ctx.inlineModelOverride) {
+  if (ctx.inlineModelOverride || ctx.inlineReasoningEffortOverride) {
     const currentMessage = ctx.threadContext.messages.find((item) => item.ts === message.ts);
     if (currentMessage) {
       currentMessage.text = message.text;
@@ -422,6 +432,7 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
     Boolean(a2aContext || ctx.options.a2aAssignmentId || ctx.options.a2aSummaryAssignmentId);
   const workspacePath = workspace?.workspacePath;
   let currentWorkspacePath = workspacePath;
+  let currentReviewSession: ReviewSessionRecord | undefined;
   const initialGitHead = workspacePath ? resolveGitHead(workspacePath) : undefined;
   let initialGitStatus: string | undefined;
   if (workspacePath) {
@@ -468,6 +479,14 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
   const sink = createPersistentExecutionSink(baseSink, deps, executionId, {
     onWorkspaceContext: (event) => {
       currentWorkspacePath = event.workspacePath;
+    },
+    onReviewWorkspaceContext: (reviewWorkspaceContext) => {
+      if (!currentReviewSession) return;
+      currentReviewSession = {
+        ...currentReviewSession,
+        ...reviewWorkspaceContext,
+        updatedAt: new Date().toISOString(),
+      };
     },
   });
 
@@ -521,16 +540,21 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
     userId: message.user,
   });
   if (workspace && deps.reviewSessionStore) {
-    deps.reviewSessionStore.start({
+    currentReviewSession = {
       baseBranch: resolveGitBranch(workspace.workspacePath),
       baseHead: resolveGitHead(workspace.workspacePath),
       channelId: message.channel,
       createdAt: startedAt,
       executionId,
+      status: 'running',
       threadTs,
+      updatedAt: startedAt,
       workspaceLabel: workspace.workspaceLabel,
       workspacePath: workspace.workspacePath,
       workspaceRepoId: workspace.repo.id,
+    };
+    deps.reviewSessionStore.start({
+      ...currentReviewSession,
     });
   }
 
@@ -556,6 +580,9 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
         threadContext,
         ...(ctx.existingSession?.agentModel
           ? { modelOverride: ctx.existingSession.agentModel }
+          : {}),
+        ...(ctx.existingSession?.agentReasoningEffort
+          ? { reasoningEffortOverride: ctx.existingSession.agentReasoningEffort }
           : {}),
         ...(contextMemories ? { contextMemories } : {}),
         ...(workspace
@@ -646,7 +673,7 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
     );
     const terminalStatus = normalizeTerminalPhase(sink.terminalPhase);
     const finalHead = currentWorkspacePath ? resolveGitHead(currentWorkspacePath) : undefined;
-    const reviewSession = deps.reviewSessionStore?.get(executionId);
+    const reviewSession = currentReviewSession ?? deps.reviewSessionStore?.get(executionId);
     const reviewSnapshot =
       reviewSession && terminalStatus === 'completed'
         ? createReviewSessionSnapshot({
@@ -680,6 +707,12 @@ function createPersistentExecutionSink(
     onWorkspaceContext?: (
       event: Extract<AgentExecutionEvent, { type: 'workspace-context' }>,
     ) => void;
+    onReviewWorkspaceContext?: (
+      session: Pick<
+        ReviewSessionRecord,
+        'baseBranch' | 'baseHead' | 'workspaceLabel' | 'workspacePath' | 'workspaceRepoId'
+      >,
+    ) => void;
   },
 ): ActivitySink {
   return {
@@ -690,13 +723,15 @@ function createPersistentExecutionSink(
       }
       if (event.type === 'workspace-context') {
         options?.onWorkspaceContext?.(event);
-        deps.reviewSessionStore?.updateWorkspaceContext?.(executionId, {
+        const reviewWorkspaceContext = {
           baseBranch: resolveGitBranch(event.workspacePath),
           baseHead: resolveGitHead(event.workspacePath),
           ...(event.workspaceLabel ? { workspaceLabel: event.workspaceLabel } : {}),
           workspacePath: event.workspacePath,
           ...(event.workspaceRepoId ? { workspaceRepoId: event.workspaceRepoId } : {}),
-        });
+        };
+        options?.onReviewWorkspaceContext?.(reviewWorkspaceContext);
+        deps.reviewSessionStore?.updateWorkspaceContext?.(executionId, reviewWorkspaceContext);
       }
       await baseSink.onEvent(event);
     },

@@ -1,3 +1,5 @@
+export type SessionReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh';
+
 export interface SessionRecord {
   a2aLead?: string | undefined;
   a2aParticipantsJson?: string | undefined;
@@ -6,6 +8,7 @@ export interface SessionRecord {
   a2aTeamId?: string | undefined;
   agentModel?: string | undefined;
   agentProvider?: string | undefined;
+  agentReasoningEffort?: SessionReasoningEffort | undefined;
   bootstrapMessageTs?: string | undefined;
   channelId: string;
   conversationMode?: 'a2a' | 'general' | undefined;

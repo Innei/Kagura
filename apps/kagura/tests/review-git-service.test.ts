@@ -195,6 +195,14 @@ describe('GitReviewService', () => {
     expect(baseHead).toBeTruthy();
 
     fs.mkdirSync(path.join(workspacePath, '~'));
+    const nestedRepoPath = path.join(workspacePath, 'nested-worktree');
+    fs.mkdirSync(nestedRepoPath);
+    git(nestedRepoPath, ['init', '-b', 'main']);
+    git(nestedRepoPath, ['config', 'user.email', 'test@example.com']);
+    git(nestedRepoPath, ['config', 'user.name', 'Test User']);
+    fs.writeFileSync(path.join(nestedRepoPath, 'README.md'), 'nested\n');
+    git(nestedRepoPath, ['add', '.']);
+    git(nestedRepoPath, ['commit', '-m', 'nested initial']);
 
     const { db, sqlite } = createTestDatabase();
     const store = new SqliteReviewSessionStore(db);
