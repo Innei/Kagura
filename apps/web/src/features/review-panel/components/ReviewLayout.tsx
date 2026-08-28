@@ -217,11 +217,11 @@ export function ReviewLayout({
         >
           <Panel
             collapsible
-            collapsedSize={0}
-            defaultSize={16}
+            collapsedSize="0%"
+            defaultSize="16%"
             id="sidebar"
-            maxSize={45}
-            minSize={16}
+            maxSize="45%"
+            minSize="16%"
             panelRef={sidebarRef}
             onResize={(size) => setCollapsed(size.asPercentage === 0)}
           >
@@ -245,7 +245,7 @@ export function ReviewLayout({
             />
           </Panel>
           <Separator aria-label="Resize sidebar" className={styles.resizeHandle} />
-          <Panel id="main" minSize={40}>
+          <Panel id="main" minSize="40%">
             <RightPane
               baseFile={baseFile}
               colorScheme={colorScheme}
