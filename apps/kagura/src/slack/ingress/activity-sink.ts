@@ -138,6 +138,12 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
   let currentWorkspacePath = initialWorkspacePath;
   let currentWorkspacePullRequestNumber = workspacePullRequestNumber;
   let currentWorkspacePullRequestUrl = workspacePullRequestUrl;
+  let changeBaselineWorkspacePath = initialWorkspacePath;
+  let changeBaselineGitHead = initialGitHead;
+  let changeBaselineGitStatus =
+    initialWorkspacePath && initialGitHead
+      ? readReviewableGitStatus(initialWorkspacePath, initialGitHead)
+      : initialGitStatus;
 
   const defaultThinkingState = createDefaultThinkingState(threadTs);
   const defaultThinkingStateKey = JSON.stringify(defaultThinkingState);
@@ -538,6 +544,11 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
   ): Promise<void> => {
     currentWorkspacePath = event.workspacePath;
     currentWorkspaceLabel = event.workspaceLabel ?? currentWorkspaceLabel ?? event.workspacePath;
+    if (event.workspacePath !== changeBaselineWorkspacePath) {
+      changeBaselineWorkspacePath = event.workspacePath;
+      changeBaselineGitHead = readGitHead(event.workspacePath);
+      changeBaselineGitStatus = readReviewableGitStatus(event.workspacePath, changeBaselineGitHead);
+    }
 
     sessionStore.patch(threadTs, {
       workspaceLabel: currentWorkspaceLabel,
@@ -571,26 +582,10 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
 
   function hasWorkspaceChanges(): boolean {
     const cwd = currentWorkspacePath;
-    if (!cwd || !initialGitHead) return true; // no snapshot, assume changed
-    try {
-      const currentHead = execFileSync('git', ['-C', cwd, 'rev-parse', 'HEAD'], {
-        encoding: 'utf8',
-        timeout: 5_000,
-      }).trim();
-      if (currentHead !== initialGitHead) return true; // new commits
-    } catch {
-      return true;
-    }
-    try {
-      const status = execFileSync('git', ['-C', cwd, 'status', '--porcelain'], {
-        encoding: 'utf8',
-        timeout: 5_000,
-      }).trim();
-      if (status !== initialGitStatus) return true; // uncommitted changes differ
-    } catch {
-      return true;
-    }
-    return false;
+    if (!cwd || !changeBaselineGitHead) return true; // no snapshot, assume changed
+    const status = readReviewableGitStatus(cwd, changeBaselineGitHead);
+    if (status === undefined) return true;
+    return status !== changeBaselineGitStatus;
   }
 
   return {
@@ -911,6 +906,53 @@ function createDefaultThinkingState(threadTs: string): AgentActivityState {
     activities: getShuffledThinkingMessages(),
     clear: false,
   };
+}
+
+function readGitHead(workspacePath: string): string | undefined {
+  try {
+    return execFileSync('git', ['-C', workspacePath, 'rev-parse', 'HEAD'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 5_000,
+    }).trim();
+  } catch {
+    return undefined;
+  }
+}
+
+function readReviewableGitStatus(
+  workspacePath: string,
+  baseHead: string | undefined,
+): string | undefined {
+  if (!baseHead) return undefined;
+  try {
+    const tracked = execFileSync(
+      'git',
+      ['-C', workspacePath, 'diff', '--name-status', '--find-renames', baseHead],
+      {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+        timeout: 5_000,
+      },
+    ).trim();
+    const untracked = execFileSync(
+      'git',
+      ['-C', workspacePath, 'ls-files', '--others', '--exclude-standard'],
+      {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+        timeout: 5_000,
+      },
+    )
+      .trim()
+      .split('\n')
+      .filter(Boolean)
+      .map((filePath) => `??\t${filePath}`)
+      .join('\n');
+    return [tracked, untracked].filter(Boolean).join('\n');
+  } catch {
+    return undefined;
+  }
 }
 
 function collectToolActivity(

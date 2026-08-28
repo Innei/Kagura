@@ -19,6 +19,7 @@ import {
   ensureThreadWorkspaceStep,
   executeAgent,
   handleStopKeywordStep,
+  parseInlineModelDirectiveStep,
   prepareThreadContext,
   resolveSessionStep,
   resolveWorkspaceStep,
@@ -93,7 +94,7 @@ describe('runConversationPipeline', () => {
 
 describe('DEFAULT_CONVERSATION_STEPS', () => {
   it('exports the expected number of steps', () => {
-    expect(DEFAULT_CONVERSATION_STEPS).toHaveLength(8);
+    expect(DEFAULT_CONVERSATION_STEPS).toHaveLength(9);
   });
 
   it('contains only functions', () => {
@@ -107,6 +108,13 @@ describe('DEFAULT_CONVERSATION_STEPS', () => {
     const stopActiveIdx = DEFAULT_CONVERSATION_STEPS.indexOf(stopActiveExecutionsStep);
     expect(stopKeywordIdx).toBeGreaterThanOrEqual(0);
     expect(stopActiveIdx).toBeGreaterThan(stopKeywordIdx);
+  });
+
+  it('parses inline model directives before workspace resolution', () => {
+    const inlineModelIdx = DEFAULT_CONVERSATION_STEPS.indexOf(parseInlineModelDirectiveStep);
+    const workspaceIdx = DEFAULT_CONVERSATION_STEPS.indexOf(resolveWorkspaceStep);
+    expect(inlineModelIdx).toBeGreaterThanOrEqual(0);
+    expect(workspaceIdx).toBeGreaterThan(inlineModelIdx);
   });
 });
 
@@ -495,6 +503,82 @@ describe('stopActiveExecutionsStep', () => {
   });
 });
 
+describe('parseInlineModelDirectiveStep', () => {
+  it('captures a leading --model directive and strips it from the trigger text', async () => {
+    const ctx = createMinimalPipelineContext();
+    ctx.message.text = '<@U_BOT> --model gpt-5.5 fix the flaky test';
+
+    const result = await parseInlineModelDirectiveStep(ctx);
+
+    expect(result.action).toBe('continue');
+    expect(ctx.inlineModelOverride).toBe('gpt-5.5');
+    expect(ctx.message.text).toBe('<@U_BOT> fix the flaky test');
+  });
+
+  it('supports --model=value and model:value forms', async () => {
+    const equalsCtx = createMinimalPipelineContext();
+    equalsCtx.message.text = '<@U_BOT> --model=openai/gpt-5 inspect this';
+
+    await parseInlineModelDirectiveStep(equalsCtx);
+
+    expect(equalsCtx.inlineModelOverride).toBe('openai/gpt-5');
+    expect(equalsCtx.message.text).toBe('<@U_BOT> inspect this');
+
+    const colonCtx = createMinimalPipelineContext();
+    colonCtx.message.text = '<@U_BOT> model:claude-sonnet-4 continue';
+
+    await parseInlineModelDirectiveStep(colonCtx);
+
+    expect(colonCtx.inlineModelOverride).toBe('claude-sonnet-4');
+    expect(colonCtx.message.text).toBe('<@U_BOT> continue');
+  });
+
+  it('does not apply inline directives once a provider session exists', async () => {
+    const ctx = createMinimalPipelineContext({
+      sessionStoreRecords: [
+        {
+          channelId: 'C123',
+          createdAt: '',
+          providerSessionId: 'provider-session',
+          rootMessageTs: 'ts1',
+          threadTs: 'ts1',
+          updatedAt: '',
+        },
+      ],
+    });
+    ctx.existingSession = ctx.deps.sessionStore.get('ts1');
+    ctx.message.text = '<@U_BOT> --model gpt-5.5 continue';
+
+    await parseInlineModelDirectiveStep(ctx);
+
+    expect(ctx.inlineModelOverride).toBeUndefined();
+    expect(ctx.message.text).toBe('<@U_BOT> --model gpt-5.5 continue');
+  });
+
+  it('applies inline directives when the message explicitly starts a new provider session', async () => {
+    const ctx = createMinimalPipelineContext({
+      sessionStoreRecords: [
+        {
+          channelId: 'C123',
+          createdAt: '',
+          providerSessionId: 'provider-session',
+          rootMessageTs: 'ts1',
+          threadTs: 'ts1',
+          updatedAt: '',
+        },
+      ],
+    });
+    ctx.existingSession = ctx.deps.sessionStore.get('ts1');
+    ctx.options.forceNewSession = true;
+    ctx.message.text = '<@U_BOT> --model gpt-5.5 start over';
+
+    await parseInlineModelDirectiveStep(ctx);
+
+    expect(ctx.inlineModelOverride).toBe('gpt-5.5');
+    expect(ctx.message.text).toBe('<@U_BOT> start over');
+  });
+});
+
 describe('resolveWorkspaceStep step', () => {
   it('returns done when workspace is ambiguous', async () => {
     const ctx = createMinimalPipelineContext({
@@ -647,6 +731,19 @@ describe('resolveSessionStep step', () => {
     expect(result.action).toBe('continue');
     expect(ctx.resumeHandle).toBeUndefined();
   });
+
+  it('persists an inline model override on the thread session', async () => {
+    const ctx = createMinimalPipelineContext();
+    ctx.inlineModelOverride = 'gpt-5.5';
+
+    await resolveSessionStep(ctx);
+
+    expect(ctx.existingSession?.agentModel).toBe('gpt-5.5');
+    expect(ctx.deps.sessionStore.patch).toHaveBeenCalledWith(
+      'ts1',
+      expect.objectContaining({ agentModel: 'gpt-5.5' }),
+    );
+  });
 });
 
 describe('prepareThreadContext step', () => {
@@ -658,6 +755,38 @@ describe('prepareThreadContext step', () => {
     expect(result.action).toBe('continue');
     expect(ctx.threadContext).toBeDefined();
     expect(ctx.deps.threadContextLoader.loadThread).toHaveBeenCalled();
+  });
+
+  it('strips an applied inline model directive from the loaded current thread message', async () => {
+    const ctx = createMinimalPipelineContext();
+    ctx.inlineModelOverride = 'gpt-5.5';
+    ctx.message.text = '<@U_BOT> fix the flaky test';
+    vi.mocked(ctx.deps.threadContextLoader.loadThread).mockResolvedValueOnce({
+      channelId: 'C123',
+      fileLoadFailures: [],
+      loadedFiles: [],
+      messages: [
+        {
+          authorId: 'U123',
+          files: [],
+          images: [],
+          rawText: '<@U_BOT> --model gpt-5.5 fix the flaky test',
+          text: '<@U_BOT> --model gpt-5.5 fix the flaky test',
+          threadTs: 'ts1',
+          ts: 'ts1',
+        },
+      ],
+      renderedPrompt: '',
+      threadTs: 'ts1',
+      loadedImages: [],
+      imageLoadFailures: [],
+    });
+
+    await prepareThreadContext(ctx);
+
+    expect(ctx.threadContext?.messages[0]?.text).toBe('<@U_BOT> fix the flaky test');
+    expect(ctx.threadContext?.renderedPrompt).toContain('<@U_BOT> fix the flaky test');
+    expect(ctx.threadContext?.renderedPrompt).not.toContain('--model');
   });
 });
 
@@ -946,6 +1075,34 @@ describe('executeAgent step', () => {
       threadTs: 'ts1',
       userText: 'hello',
     });
+  });
+
+  it('passes the persisted inline model override and stripped mention text to the executor', async () => {
+    const ctx = createMinimalPipelineContext({
+      sessionStoreRecords: [
+        {
+          agentModel: 'gpt-5.5',
+          channelId: 'C123',
+          createdAt: '',
+          rootMessageTs: 'ts1',
+          threadTs: 'ts1',
+          updatedAt: '',
+        },
+      ],
+    });
+    ctx.existingSession = ctx.deps.sessionStore.get('ts1');
+    ctx.message.text = '<@U_BOT> fix the flaky test';
+    await prepareThreadContext(ctx);
+
+    await executeAgent(ctx);
+
+    expect(ctx.deps.claudeExecutor.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mentionText: '<@U_BOT> fix the flaky test',
+        modelOverride: 'gpt-5.5',
+      }),
+      expect.anything(),
+    );
   });
 
   it('does not trigger host memory ingestion for failed executions', async () => {

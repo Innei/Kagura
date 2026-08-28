@@ -1,4 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentActivityState } from '~/agent/types.js';
 import type { SessionAnalyticsStore } from '~/analytics/types.js';
@@ -9,6 +14,14 @@ import type { SlackPermissionBridge } from '~/slack/interaction/permission-bridg
 import type { SlackRenderer } from '~/slack/render/slack-renderer.js';
 import type { SlackWebClientLike } from '~/slack/types.js';
 import * as workspaceResolverModule from '~/workspace/resolver.js';
+
+const tempDirs: string[] = [];
+
+afterEach(() => {
+  for (const dir of tempDirs.splice(0)) {
+    fs.rmSync(dir, { force: true, recursive: true });
+  }
+});
 
 function createTestLogger(): AppLogger {
   const logger = {
@@ -33,6 +46,7 @@ function createRendererStub(): SlackRenderer {
     finalizeThreadProgressMessage: vi.fn().mockResolvedValue(undefined),
     postGeneratedFiles: vi.fn().mockResolvedValue([]),
     postGeneratedImages: vi.fn().mockResolvedValue([]),
+    postReviewPanelLink: vi.fn().mockResolvedValue(undefined),
     finalizeThreadProgressMessageStopped: vi.fn().mockResolvedValue(undefined),
     postThreadReply: vi.fn().mockResolvedValue(undefined),
     updateThreadReplyWorkspaceContext: vi.fn().mockResolvedValue(undefined),
@@ -90,6 +104,41 @@ function createMockAnalyticsStore(): SessionAnalyticsStore {
     getRecentSessions: vi.fn().mockReturnValue([]),
     upsert: vi.fn(),
   };
+}
+
+function createGitFixture(): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kagura-activity-'));
+  tempDirs.push(dir);
+  fs.mkdirSync(path.join(dir, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'src/index.ts'), 'export const value = 1;\n');
+  git(dir, ['init', '-b', 'main']);
+  git(dir, ['config', 'user.email', 'test@example.com']);
+  git(dir, ['config', 'user.name', 'Test User']);
+  git(dir, ['add', '.']);
+  git(dir, ['commit', '-m', 'initial']);
+  return dir;
+}
+
+function git(cwd: string, args: string[]): void {
+  execFileSync('git', ['-c', 'commit.gpgsign=false', ...args], {
+    cwd,
+    env: {
+      ...process.env,
+      GIT_AUTHOR_EMAIL: 'test@example.com',
+      GIT_AUTHOR_NAME: 'Test User',
+      GIT_COMMITTER_EMAIL: 'test@example.com',
+      GIT_COMMITTER_NAME: 'Test User',
+    },
+    stdio: 'ignore',
+  });
+}
+
+function gitOutput(cwd: string, args: string[]): string {
+  return execFileSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  }).trim();
 }
 
 describe('createActivitySink', () => {
@@ -1134,6 +1183,80 @@ describe('createActivitySink', () => {
     );
 
     metadataSpy.mockRestore();
+  });
+
+  it('does not post review panel link when a provider worktree switch has no reviewable diff', async () => {
+    const sourcePath = createGitFixture();
+    const worktreePath = path.join(os.tmpdir(), `kagura-activity-worktree-${Date.now()}`);
+    git(sourcePath, ['worktree', 'add', worktreePath]);
+    try {
+      const renderer = createRendererStub();
+      const sink = createActivitySink({
+        channel: 'C123',
+        client: createMockClient(),
+        initialGitHead: gitOutput(sourcePath, ['rev-parse', 'HEAD']),
+        initialGitStatus: '',
+        logger: createTestLogger(),
+        renderer,
+        reviewUrl: 'https://kagura.example/reviews/exec-1',
+        sessionStore: createMockSessionStore(),
+        threadTs: 'ts1',
+        workspaceLabel: 'repo',
+        workspacePath: sourcePath,
+      });
+
+      await sink.onEvent({
+        type: 'workspace-context',
+        workspaceLabel: 'repo-worktree',
+        workspacePath: worktreePath,
+      });
+      await sink.onEvent({ type: 'lifecycle', phase: 'completed' });
+      await sink.finalize();
+
+      expect(renderer.postReviewPanelLink).not.toHaveBeenCalled();
+    } finally {
+      git(sourcePath, ['worktree', 'remove', '--force', worktreePath]);
+    }
+  });
+
+  it('posts review panel link when worktree files changed after workspace context', async () => {
+    const sourcePath = createGitFixture();
+    const worktreePath = path.join(os.tmpdir(), `kagura-activity-worktree-${Date.now()}`);
+    git(sourcePath, ['worktree', 'add', worktreePath]);
+    try {
+      const renderer = createRendererStub();
+      const sink = createActivitySink({
+        channel: 'C123',
+        client: createMockClient(),
+        initialGitHead: gitOutput(sourcePath, ['rev-parse', 'HEAD']),
+        initialGitStatus: '',
+        logger: createTestLogger(),
+        renderer,
+        reviewUrl: 'https://kagura.example/reviews/exec-1',
+        sessionStore: createMockSessionStore(),
+        threadTs: 'ts1',
+        workspaceLabel: 'repo',
+        workspacePath: sourcePath,
+      });
+
+      await sink.onEvent({
+        type: 'workspace-context',
+        workspaceLabel: 'repo-worktree',
+        workspacePath: worktreePath,
+      });
+      fs.writeFileSync(path.join(worktreePath, 'src/index.ts'), 'export const value = 2;\n');
+      await sink.onEvent({ type: 'lifecycle', phase: 'completed' });
+      await sink.finalize();
+
+      expect(renderer.postReviewPanelLink).toHaveBeenCalledWith(
+        expect.anything(),
+        'C123',
+        'ts1',
+        'https://kagura.example/reviews/exec-1',
+      );
+    } finally {
+      git(sourcePath, ['worktree', 'remove', '--force', worktreePath]);
+    }
   });
 
   it('forwards permission requests to the Slack permission bridge', async () => {

@@ -89,6 +89,7 @@ export interface ConversationPipelineContext {
   contextMemories?: ContextMemories | undefined;
   deps: SlackIngressDependencies;
   existingSession?: SessionRecord | undefined;
+  inlineModelOverride?: string | undefined;
   message: ThreadConversationMessage;
 
   options: ThreadConversationOptions;

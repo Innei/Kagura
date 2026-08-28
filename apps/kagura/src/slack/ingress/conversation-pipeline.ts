@@ -15,9 +15,11 @@ import { formatClaudeExecutionFailureReply } from '~/util/error-detail.js';
 import { enrichResolvedWorkspace } from '~/workspace/resolver.js';
 import { GitThreadWorkspaceManager } from '~/workspace/thread-worktree.js';
 
+import { renderThreadPrompt } from '../context/thread-context-loader.js';
 import type { ThreadExecutionStopReason } from '../execution/thread-execution-registry.js';
 import type { SlackWebClientLike } from '../types.js';
 import { type ActivitySink, createActivitySink } from './activity-sink.js';
+import { extractLeadingModelDirective } from './model-directive.js';
 import { getA2AContextFromSession, serializeA2AParticipants } from './scenarios/a2a/routing.js';
 import { resolveAndPersistSession } from './session-manager.js';
 import type {
@@ -194,6 +196,30 @@ export async function stopActiveExecutionsStep(
   return CONTINUE;
 }
 
+export async function parseInlineModelDirectiveStep(
+  ctx: ConversationPipelineContext,
+): Promise<PipelineStepResult> {
+  const parsed = extractLeadingModelDirective(ctx.message.text);
+  if (!parsed) {
+    return CONTINUE;
+  }
+
+  if (ctx.existingSession?.providerSessionId && ctx.options.forceNewSession !== true) {
+    return CONTINUE;
+  }
+
+  ctx.inlineModelOverride = parsed.model;
+  ctx.message.text = parsed.text;
+  runtimeInfo(
+    ctx.deps.logger,
+    'Inline model directive detected for new provider session in thread %s: %s',
+    ctx.threadTs,
+    parsed.model,
+  );
+
+  return CONTINUE;
+}
+
 export async function resolveWorkspaceStep(
   ctx: ConversationPipelineContext,
 ): Promise<PipelineStepResult> {
@@ -321,6 +347,7 @@ export async function resolveSessionStep(
   deps.sessionStore.patch(threadTs, {
     ...a2aFields,
     ...(options.agentProviderOverride ? { agentProvider: options.agentProviderOverride } : {}),
+    ...(ctx.inlineModelOverride ? { agentModel: ctx.inlineModelOverride } : {}),
     lastTurnTriggerTs: message.ts,
   });
   ctx.existingSession = deps.sessionStore.get(threadTs) ?? ctx.existingSession;
@@ -339,6 +366,14 @@ export async function prepareThreadContext(
 
   runtimeInfo(deps.logger, 'Loading thread context for %s', threadTs);
   ctx.threadContext = await deps.threadContextLoader.loadThread(client, message.channel, threadTs);
+  if (ctx.inlineModelOverride) {
+    const currentMessage = ctx.threadContext.messages.find((item) => item.ts === message.ts);
+    if (currentMessage) {
+      currentMessage.text = message.text;
+      currentMessage.rawText = message.text;
+      ctx.threadContext.renderedPrompt = renderThreadPrompt(ctx.threadContext.messages);
+    }
+  }
   runtimeInfo(
     deps.logger,
     'Thread context loaded for %s (%d messages)',
@@ -751,6 +786,7 @@ export const DEFAULT_CONVERSATION_STEPS: PipelineStep[] = [
   acknowledgeAndLog,
   handleStopKeywordStep,
   stopActiveExecutionsStep,
+  parseInlineModelDirectiveStep,
   resolveWorkspaceStep,
   ensureThreadWorkspaceStep,
   resolveSessionStep,

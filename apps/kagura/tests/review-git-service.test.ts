@@ -189,6 +189,34 @@ describe('GitReviewService', () => {
     sqlite.close();
   });
 
+  it('does not surface untracked directories without reviewable files', () => {
+    const workspacePath = createGitFixture();
+    const baseHead = resolveGitHead(workspacePath);
+    expect(baseHead).toBeTruthy();
+
+    fs.mkdirSync(path.join(workspacePath, '~'));
+
+    const { db, sqlite } = createTestDatabase();
+    const store = new SqliteReviewSessionStore(db);
+    store.start({
+      baseBranch: 'main',
+      baseHead,
+      channelId: 'C1',
+      createdAt: new Date().toISOString(),
+      executionId: 'exec-untracked-dir',
+      threadTs: '123.456',
+      workspaceLabel: 'fixture',
+      workspacePath,
+      workspaceRepoId: 'fixture',
+    });
+
+    const service = new GitReviewService(store);
+    expect(service.getSession('exec-untracked-dir')?.changedFiles).toEqual([]);
+    expect(service.getDiff('exec-untracked-dir')).toBe('');
+
+    sqlite.close();
+  });
+
   it('returns base file via git show and head from working tree', async () => {
     const workspacePath = createGitFixture();
     const baseHead = resolveGitHead(workspacePath);

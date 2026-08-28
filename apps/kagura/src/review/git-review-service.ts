@@ -224,14 +224,13 @@ function getChangedFiles(session: ReviewSessionRecord): ReviewChangedFile[] {
     .filter((entry): entry is ReviewChangedFile => Boolean(entry));
   const seen = new Set(changed.map((entry) => entry.path));
 
-  for (const statusEntry of runGit(session.workspacePath, ['status', '--porcelain=v1']).split(
-    '\n',
-  )) {
-    if (!statusEntry.trim()) continue;
-    if (!statusEntry.startsWith('??')) continue;
-    const filePath = parsePorcelainPath(statusEntry);
+  for (const filePath of runGit(session.workspacePath, [
+    'ls-files',
+    '--others',
+    '--exclude-standard',
+  ]).split('\n')) {
     if (!filePath || seen.has(filePath)) continue;
-    changed.push({ path: filePath, status: statusEntry.slice(0, 2).trim() || '?' });
+    changed.push({ path: filePath, status: '??' });
     seen.add(filePath);
   }
 
@@ -346,13 +345,6 @@ function parseNameStatus(line: string): ReviewChangedFile | undefined {
   const filePath = parts.at(-1);
   if (!status || !filePath) return undefined;
   return { path: filePath, status };
-}
-
-function parsePorcelainPath(line: string): string | undefined {
-  const raw = line.slice(3);
-  if (!raw) return undefined;
-  const renamed = raw.split(' -> ').at(-1);
-  return renamed?.replaceAll(/^"|"$/g, '');
 }
 
 function isUntracked(session: ReviewSessionRecord, filePath: string): boolean {
