@@ -1,6 +1,6 @@
 # Live E2E testing
 
-The repository includes a real Slack <-> Claude live E2E runner that starts the local Socket Mode app, posts a real `@mention` into a dedicated Slack channel, waits for the agent-backed reply, and records every `assistant.threads.setStatus` payload to a local JSONL probe.
+The repository includes a real Slack <-> Claude live E2E runner that starts the local Socket Mode app, posts a real `@mention` into a dedicated Slack channel, waits for the agent-backed reply, and records every Agent Sessions status payload to a local JSONL probe.
 
 ## Prerequisites
 

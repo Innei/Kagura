@@ -305,7 +305,7 @@ describe('createActivitySink', () => {
     );
   });
 
-  it('clears UI state after assistant-message', async () => {
+  it('keeps native loading active after assistant-message', async () => {
     const renderer = createRendererStub();
     const sink = createActivitySink({
       channel: 'C123',
@@ -318,7 +318,9 @@ describe('createActivitySink', () => {
 
     await sink.onEvent({ type: 'assistant-message', text: 'Hello!' });
 
-    expect(renderer.clearUiState).toHaveBeenCalled();
+    expect(renderer.clearUiState).not.toHaveBeenCalled();
+    await sink.finalize();
+    expect(renderer.clearUiState).toHaveBeenCalledWith(expect.anything(), 'C123', 'ts1');
   });
 
   it('buffers quiet A2A assistant messages and posts only the final one on completion', async () => {
@@ -481,6 +483,38 @@ describe('createActivitySink', () => {
     expect(renderer.clearUiState).toHaveBeenCalledWith(expect.anything(), 'C123', 'ts1');
   });
 
+  it('clears native loading when clearing an active progress message', async () => {
+    const renderer = createRendererStub();
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    await sink.onEvent({
+      type: 'task-update',
+      taskId: 'cmd-1',
+      title: 'git status',
+      status: 'in_progress',
+      details: 'Checking repository state',
+    });
+    await sink.onEvent({
+      type: 'activity-state',
+      state: { clear: true, threadTs: 'ts1' },
+    });
+
+    expect(renderer.deleteThreadProgressMessage).toHaveBeenCalledWith(
+      expect.anything(),
+      'C123',
+      'ts1',
+      'progress-ts',
+    );
+    expect(renderer.clearUiState).toHaveBeenCalledWith(expect.anything(), 'C123', 'ts1');
+  });
+
   it('tracks tool activity in toolHistory', async () => {
     const renderer = createRendererStub();
     const sink = createActivitySink({
@@ -501,6 +535,39 @@ describe('createActivitySink', () => {
     await sink.onEvent({ type: 'activity-state', state });
 
     expect(sink.toolHistory.get('Reading')).toBe(1);
+  });
+
+  it('keeps provider thinking states on native loading instead of progress messages', async () => {
+    const renderer = createRendererStub();
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    await sink.onEvent({
+      type: 'activity-state',
+      state: {
+        activities: ['Codex is thinking...'],
+        clear: false,
+        status: 'Codex is thinking...',
+        threadTs: 'ts1',
+      },
+    });
+
+    expect(renderer.upsertThreadProgressMessage).not.toHaveBeenCalled();
+    expect(renderer.setUiState).toHaveBeenCalledWith(
+      expect.anything(),
+      'C123',
+      expect.objectContaining({
+        clear: false,
+        status: 'Codex is thinking...',
+        threadTs: 'ts1',
+      }),
+    );
   });
 
   it('publishes task updates through the progress message state', async () => {

@@ -1,15 +1,6 @@
-// Slack's `assistant.threads.setStatus` drives the assistant-thread container's
-// loading/status UI — NOT a channel message. Two fields ride that call:
-//   - `status`: a single short line rendered as "{AppName} {status}" in the
-//     thread header.
-//   - `loading_messages`: a list powering the rotating loading indicator inside
-//     the assistant-thread panel. Each entry is also rendered as
-//     "{AppName} {entry}".
-// Slack does NOT prepend "is" — the renderer wraps every fragment with a
-// leading "is " at the `setStatus` boundary so these strings read naturally
-// ("{AppName} is turning the question over..."). The source-of-truth form
-// below stays capitalized so it also reads as a standalone sentence in
-// progress chat messages and logs.
+// These strings are used for Kagura's own progress/probe text. Slack's current
+// Agent Sessions API accepts only lifecycle states such as `processing`, so the
+// native loading indicator no longer carries custom loading messages.
 
 // Canonical default string used whenever no tool-specific progress applies.
 // All `'Thinking...'` literals across the codebase MUST reference this

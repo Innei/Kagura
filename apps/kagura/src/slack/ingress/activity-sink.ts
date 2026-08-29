@@ -87,6 +87,7 @@ export interface ActivitySink {
 
 const TOOL_VERB_PATTERN =
   /^(Reading|Searching|Finding|Fetching|Calling|Running|Exploring|Recalling|Saving|Checking|Applying|Editing|Generating|Waiting|Using|Writing) (.+?)(?:\.{3})?$/;
+const GENERIC_PROVIDER_THINKING_STATUS_PATTERN = /^[\w .-]+ is thinking\.{3}$/i;
 const MAX_PROGRESS_TASKS = 12;
 
 export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
@@ -161,6 +162,9 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     ...THINKING_LOADING_MESSAGES,
   ]);
 
+  const isGenericThinkingText = (text: string): boolean =>
+    genericThinkingActivities.has(text) || GENERIC_PROVIDER_THINKING_STATUS_PATTERN.test(text);
+
   const safeRender = async <T>(
     label: string,
     operation: () => Promise<T>,
@@ -218,14 +222,14 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     if (JSON.stringify(state) === defaultThinkingStateKey) return false;
 
     const normalizedStatus = state.status?.trim();
-    if (normalizedStatus && normalizedStatus !== defaultThinkingState.status) return true;
+    if (normalizedStatus && !isGenericThinkingText(normalizedStatus)) return true;
 
     const meaningfulActivity = state.activities?.some((activity) => {
       const normalizedActivity = activity.trim();
       return (
         normalizedActivity.length > 0 &&
         normalizedActivity !== normalizedStatus &&
-        !genericThinkingActivities.has(normalizedActivity)
+        !isGenericThinkingText(normalizedActivity)
       );
     });
 
@@ -267,9 +271,6 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
   const activateProgressMessage = async (state: AgentActivityState): Promise<void> => {
     if (!progressMessageActive) {
       progressMessageActive = true;
-      await renderer.clearUiState(client, channel, threadTs).catch((error) => {
-        logger.warn('Failed to clear fallback Slack thinking indicator: %s', String(error));
-      });
     }
     const nextProgressMessageTs = await safeRender('activate thread progress message', () =>
       renderer.upsertThreadProgressMessage(
@@ -351,9 +352,6 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     toolHistory.clear();
     progressTasks.clear();
     previousActivities = new Set<string>();
-    await renderer.clearUiState(client, channel, threadTs).catch((error) => {
-      logger.warn('Failed to clear UI state after assistant reply: %s', String(error));
-    });
   };
 
   const handleAssistantMessageDelta = (text: string): void => {
@@ -534,7 +532,6 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
         );
         progressMessageTs = undefined;
         progressMessageActive = false;
-        return;
       }
       await safeRender('clear Slack UI state', () =>
         renderer.clearUiState(client, channel, threadTs),
