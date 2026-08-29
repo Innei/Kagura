@@ -126,6 +126,7 @@ describe('syncSlashCommands with token rotation', () => {
       slackOk({
         manifest: {
           features: {
+            agent_view: { agent_description: 'existing' },
             app_home: { home_tab_enabled: true },
             bot_user: { display_name: 'cc-001', always_online: true },
             slash_commands: [
@@ -148,7 +149,13 @@ describe('syncSlashCommands with token rotation', () => {
           },
           settings: {
             event_subscriptions: {
-              bot_events: ['app_home_opened', 'message.channels', 'message.groups', 'message.im'],
+              bot_events: [
+                'agent_session_stopped',
+                'app_home_opened',
+                'message.channels',
+                'message.groups',
+                'message.im',
+              ],
             },
           },
         },
@@ -196,6 +203,7 @@ describe('syncSlashCommands with token rotation', () => {
         slackOk({
           manifest: {
             features: {
+              agent_view: { agent_description: 'existing' },
               app_home: { home_tab_enabled: true },
               bot_user: { display_name: 'cc-001', always_online: true },
               slash_commands: [
@@ -218,7 +226,13 @@ describe('syncSlashCommands with token rotation', () => {
             },
             settings: {
               event_subscriptions: {
-                bot_events: ['app_home_opened', 'message.channels', 'message.groups', 'message.im'],
+                bot_events: [
+                  'agent_session_stopped',
+                  'app_home_opened',
+                  'message.channels',
+                  'message.groups',
+                  'message.im',
+                ],
               },
             },
           },
@@ -373,6 +387,7 @@ describe('syncSlashCommands with token rotation', () => {
       slackOk({
         manifest: {
           features: {
+            agent_view: { agent_description: 'existing' },
             app_home: { home_tab_enabled: true },
             bot_user: { display_name: 'cc-001', always_online: true },
             slash_commands: [
@@ -395,7 +410,13 @@ describe('syncSlashCommands with token rotation', () => {
           },
           settings: {
             event_subscriptions: {
-              bot_events: ['app_home_opened', 'message.channels', 'message.groups', 'message.im'],
+              bot_events: [
+                'agent_session_stopped',
+                'app_home_opened',
+                'message.channels',
+                'message.groups',
+                'message.im',
+              ],
             },
           },
         },
@@ -422,6 +443,7 @@ describe('syncSlashCommands with token rotation', () => {
         slackOk({
           manifest: {
             features: {
+              agent_view: { agent_description: 'existing' },
               app_home: { home_tab_enabled: true },
               bot_user: { display_name: 'cc-001', always_online: true },
               slash_commands: [
@@ -470,6 +492,7 @@ describe('syncSlashCommands with token rotation', () => {
     const body = JSON.parse(updateInit.body as string);
     expect(body.manifest.settings.event_subscriptions.bot_events).toEqual(
       expect.arrayContaining([
+        'agent_session_stopped',
         'app_home_opened',
         'message.channels',
         'message.groups',
@@ -546,5 +569,54 @@ describe('syncSlashCommands with token rotation', () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('No valid config token'));
+  });
+  it('migrates a deprecated assistant_view app to agent_view', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'manifest-sync-agent-view-'));
+    const tokenStorePath = path.join(tmpDir, 'tokens.json');
+
+    fetchMock
+      .mockResolvedValueOnce(
+        slackOk({
+          manifest: {
+            features: {
+              assistant_view: { assistant_description: 'legacy' },
+              app_home: { home_tab_enabled: true },
+              bot_user: { display_name: 'cc-001', always_online: true },
+              slash_commands: [],
+              shortcuts: [],
+            },
+            oauth_config: { scopes: { bot: ['chat:write'] } },
+            settings: {
+              event_subscriptions: {
+                bot_events: [
+                  'agent_session_stopped',
+                  'app_home_opened',
+                  'message.channels',
+                  'message.groups',
+                  'message.im',
+                ],
+              },
+            },
+          },
+        }),
+      )
+      .mockResolvedValueOnce(slackOk({}));
+
+    const logger = createTestLogger();
+    await syncSlashCommands({
+      appId: 'A123',
+      configToken: 'xoxe.xoxp-token',
+      logger,
+      tokenStorePath,
+    });
+
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('deprecated assistant_view'));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, updateInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+    const body = JSON.parse(updateInit.body as string);
+    expect(body.manifest.features.agent_view.agent_description).toEqual(expect.any(String));
+    expect(body.manifest.features.agent_view.suggested_prompts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ title: expect.any(String) })]),
+    );
   });
 });

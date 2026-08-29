@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import { resolveKaguraPaths } from '@kagura/cli/config/paths';
 import {
+  DESIRED_AGENT_VIEW,
   DESIRED_BOT_EVENTS,
   DESIRED_COMMANDS,
   DESIRED_SHORTCUTS,
@@ -40,7 +41,9 @@ interface SlackManifestOAuthConfig {
 interface SlackManifest {
   [key: string]: unknown;
   features?: {
+    agent_view?: { agent_description?: string };
     app_home?: SlackManifestAppHome;
+    assistant_view?: unknown;
     bot_user?: SlackManifestBotUser;
     shortcuts?: SlackManifestShortcut[];
     slash_commands?: SlackManifestSlashCommand[];
@@ -123,6 +126,13 @@ export async function syncSlashCommands(options: ManifestSyncOptions): Promise<v
   const appHome = currentManifest.features?.app_home;
   const needsHomeTab = !appHome?.home_tab_enabled;
 
+  // assistant_view is deprecated (Slack removes it in February 2027); agent_view
+  // is what agents.sessions.* requires.
+  const needsAgentView = !currentManifest.features?.agent_view?.agent_description;
+  if (needsAgentView && currentManifest.features?.assistant_view) {
+    logger.warn('App still declares the deprecated assistant_view — migrating it to agent_view');
+  }
+
   // Ensure required bot events are subscribed
   const existingBotEvents = currentManifest.settings?.event_subscriptions?.bot_events ?? [];
   const obsoleteBotEvents = existingBotEvents.filter((event) =>
@@ -153,6 +163,7 @@ export async function syncSlashCommands(options: ManifestSyncOptions): Promise<v
     missingShortcuts.length === 0 &&
     !needsAlwaysOnline &&
     !needsHomeTab &&
+    !needsAgentView &&
     missingBotEvents.length === 0 &&
     obsoleteBotEvents.length === 0 &&
     obsoleteBotScopes.length === 0
@@ -185,6 +196,9 @@ export async function syncSlashCommands(options: ManifestSyncOptions): Promise<v
   if (needsHomeTab) {
     logger.info('Enabling app_home.home_tab_enabled for Home tab');
   }
+  if (needsAgentView) {
+    logger.info('Enabling features.agent_view for the Agent messaging experience');
+  }
   if (missingBotEvents.length > 0) {
     logger.info('Adding missing bot events: %s', missingBotEvents.join(', '));
   }
@@ -206,6 +220,7 @@ export async function syncSlashCommands(options: ManifestSyncOptions): Promise<v
     ...currentManifest,
     features: {
       ...currentManifest.features,
+      agent_view: { ...currentManifest.features?.agent_view, ...DESIRED_AGENT_VIEW },
       app_home: {
         ...currentManifest.features?.app_home,
         home_tab_enabled: true,

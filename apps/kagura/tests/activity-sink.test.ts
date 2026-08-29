@@ -49,6 +49,16 @@ function createRendererStub(): SlackRenderer {
     postReviewPanelLink: vi.fn().mockResolvedValue(undefined),
     finalizeThreadProgressMessageStopped: vi.fn().mockResolvedValue(undefined),
     postThreadReply: vi.fn().mockResolvedValue(undefined),
+    createStreamingReply: vi.fn(() => ({
+      append: vi.fn(),
+      failed: false,
+      finish: vi.fn().mockResolvedValue('stream-ts'),
+      text: '',
+      ts: 'stream-ts',
+    })),
+    finalizeStreamingReply: vi
+      .fn()
+      .mockResolvedValue({ blocks: [], text: 'Streamed!', ts: 'stream-ts' }),
     updateThreadReplyWorkspaceContext: vi.fn().mockResolvedValue(undefined),
     setUiState: vi.fn().mockResolvedValue(undefined),
     showThinkingIndicator: vi.fn().mockResolvedValue(undefined),
@@ -59,7 +69,7 @@ function createRendererStub(): SlackRenderer {
 
 function createMockClient(): SlackWebClientLike {
   return {
-    assistant: { threads: { setStatus: vi.fn().mockResolvedValue({}) } },
+    apiCall: vi.fn().mockResolvedValue({}),
     auth: { test: vi.fn().mockResolvedValue({ user_id: 'U_BOT' }) },
     chat: {
       delete: vi.fn().mockResolvedValue({}),
@@ -162,6 +172,94 @@ describe('createActivitySink', () => {
       'Hello!',
       expect.any(Object),
     );
+  });
+
+  it('streams the reply when the provider emits deltas', async () => {
+    const renderer = createRendererStub();
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      teamId: 'T1',
+      threadTs: 'ts1',
+      userId: 'U1',
+    });
+
+    await sink.onEvent({ type: 'assistant-message-delta', text: 'Stre' });
+    await sink.onEvent({ type: 'assistant-message-delta', text: 'amed!' });
+    await sink.onEvent({ type: 'assistant-message', text: 'Streamed!' });
+
+    expect(renderer.createStreamingReply).toHaveBeenCalledOnce();
+    expect(renderer.finalizeStreamingReply).toHaveBeenCalledOnce();
+    expect(renderer.postThreadReply).not.toHaveBeenCalled();
+  });
+
+  it('falls back to a plain thread reply when the stream failed', async () => {
+    const renderer = createRendererStub();
+    (renderer.createStreamingReply as ReturnType<typeof vi.fn>).mockReturnValue({
+      append: vi.fn(),
+      failed: true,
+      finish: vi.fn().mockResolvedValue(undefined),
+      text: 'Streamed!',
+      ts: undefined,
+    });
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    await sink.onEvent({ type: 'assistant-message-delta', text: 'Streamed!' });
+    await sink.onEvent({ type: 'assistant-message', text: 'Streamed!' });
+
+    expect(renderer.finalizeStreamingReply).not.toHaveBeenCalled();
+    expect(renderer.postThreadReply).toHaveBeenCalledWith(
+      expect.anything(),
+      'C123',
+      'ts1',
+      'Streamed!',
+      expect.any(Object),
+    );
+  });
+
+  it('does not stream in quiet A2A mode', async () => {
+    const renderer = createRendererStub();
+    const sink = createActivitySink({
+      assistantMessageVisibility: 'quiet-final',
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    await sink.onEvent({ type: 'assistant-message-delta', text: 'hidden' });
+
+    expect(renderer.createStreamingReply).not.toHaveBeenCalled();
+  });
+
+  it('closes a dangling stream on finalize when the run is stopped', async () => {
+    const renderer = createRendererStub();
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    await sink.onEvent({ type: 'assistant-message-delta', text: 'partial' });
+    await sink.onEvent({ type: 'lifecycle', phase: 'stopped', reason: 'user_stop' });
+    await sink.finalize();
+
+    expect(renderer.finalizeStreamingReply).toHaveBeenCalledOnce();
   });
 
   it('exposes the final assistant text for host memory ingestion', async () => {

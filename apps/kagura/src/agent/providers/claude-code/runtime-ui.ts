@@ -28,8 +28,17 @@ type StreamToolDeltaEvent = {
   delta: {
     type: string;
     partial_json?: string;
+    text?: string;
   };
 };
+
+export function extractStreamTextDelta(message: SDKPartialAssistantMessage): string | undefined {
+  const event = message.event as StreamToolDeltaEvent;
+  if (event.type !== 'content_block_delta' || event.delta.type !== 'text_delta') {
+    return undefined;
+  }
+  return event.delta.text || undefined;
+}
 
 type StreamToolStopEvent = {
   type: 'content_block_stop';

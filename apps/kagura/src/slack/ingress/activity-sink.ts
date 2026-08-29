@@ -24,6 +24,7 @@ import { resolveWorkspaceDisplayMetadata } from '~/workspace/resolver.js';
 import type { SlackPermissionBridge } from '../interaction/permission-bridge.js';
 import type { SlackUserInputBridge } from '../interaction/user-input-bridge.js';
 import type { PostedThreadReply, ProgressTask, SlackRenderer } from '../render/slack-renderer.js';
+import type { StreamingReply } from '../render/streaming-reply.js';
 import {
   DEFAULT_ASSISTANT_THINKING_STATUS,
   getShuffledThinkingMessages,
@@ -49,6 +50,7 @@ export interface ActivitySinkOptions {
   reviewUrl?: string | undefined;
   sessionStore: SessionStore;
   taskCardBlocksEnabled?: boolean | undefined;
+  teamId?: string | undefined;
   threadTs: string;
   userId?: string;
   userInputBridge?: SlackUserInputBridge;
@@ -105,6 +107,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     reviewUrl,
     sessionStore,
     taskCardBlocksEnabled = false,
+    teamId,
     threadTs,
     userId,
     userInputBridge,
@@ -133,6 +136,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
   let lastAssistantReply: PostedThreadReply | undefined;
   let lastAssistantText: string | undefined;
   let toolbarReply: PostedThreadReply | undefined;
+  let streamingReply: StreamingReply | undefined;
   const quietAssistantMessages: string[] = [];
   let currentWorkspaceBranch = workspaceBranch;
   let currentWorkspaceLabel = initialWorkspaceLabel;
@@ -306,36 +310,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
       });
   };
 
-  const postAssistantMessage = async (text: string): Promise<void> => {
-    lastAssistantText = text;
-    // Only include toolbar (workspaceLabel + toolHistory) on the first message of each turn
-    const includeToolbar = !hasSentToolbarInTurn;
-    await maybeRefreshWorkspaceContext();
-    try {
-      const postedReply = await renderer.postThreadReply(client, channel, threadTs, text, {
-        ...(includeToolbar && currentWorkspaceBranch
-          ? { workspaceBranch: currentWorkspaceBranch }
-          : {}),
-        ...(includeToolbar && currentWorkspaceLabel
-          ? { workspaceLabel: currentWorkspaceLabel }
-          : {}),
-        ...(includeToolbar && currentWorkspacePullRequestNumber
-          ? { workspacePullRequestNumber: currentWorkspacePullRequestNumber }
-          : {}),
-        ...(includeToolbar && currentWorkspacePullRequestUrl
-          ? { workspacePullRequestUrl: currentWorkspacePullRequestUrl }
-          : {}),
-      });
-      if (postedReply) {
-        lastAssistantReply = postedReply;
-        if (includeToolbar) {
-          toolbarReply = postedReply;
-        }
-      }
-      hasSentToolbarInTurn = true;
-    } catch (error) {
-      logger.warn('Failed to post assistant thread reply: %s', String(error));
-    }
+  const flushPendingAssistantAttachments = async (): Promise<void> => {
     if (pendingGeneratedFiles.length > 0) {
       const batch = [...pendingGeneratedFiles];
       try {
@@ -379,6 +354,84 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     await renderer.clearUiState(client, channel, threadTs).catch((error) => {
       logger.warn('Failed to clear UI state after assistant reply: %s', String(error));
     });
+  };
+
+  const handleAssistantMessageDelta = (text: string): void => {
+    if (assistantMessageVisibility !== 'public') {
+      return;
+    }
+    streamingReply ??= renderer.createStreamingReply(client, channel, threadTs, {
+      teamId,
+      userId,
+    });
+    streamingReply.append(text);
+  };
+
+  const postAssistantMessage = async (text: string): Promise<void> => {
+    lastAssistantText = text;
+    // Only include toolbar (workspaceLabel + toolHistory) on the first message of each turn
+    const includeToolbar = !hasSentToolbarInTurn;
+    await maybeRefreshWorkspaceContext();
+
+    const contextOptions = {
+      ...(includeToolbar && currentWorkspaceBranch
+        ? { workspaceBranch: currentWorkspaceBranch }
+        : {}),
+      ...(includeToolbar && currentWorkspaceLabel ? { workspaceLabel: currentWorkspaceLabel } : {}),
+      ...(includeToolbar && currentWorkspacePullRequestNumber
+        ? { workspacePullRequestNumber: currentWorkspacePullRequestNumber }
+        : {}),
+      ...(includeToolbar && currentWorkspacePullRequestUrl
+        ? { workspacePullRequestUrl: currentWorkspacePullRequestUrl }
+        : {}),
+    };
+
+    const pendingStream = streamingReply;
+    streamingReply = undefined;
+    if (pendingStream && !pendingStream.failed) {
+      const streamedReply = await renderer
+        .finalizeStreamingReply(pendingStream, contextOptions)
+        .catch((error: unknown) => {
+          logger.warn('Failed to finalize streamed assistant reply: %s', String(error));
+          return undefined;
+        });
+      if (streamedReply) {
+        lastAssistantReply = streamedReply;
+        if (includeToolbar) {
+          toolbarReply = streamedReply;
+        }
+        hasSentToolbarInTurn = true;
+        await flushPendingAssistantAttachments();
+        return;
+      }
+    }
+
+    try {
+      const postedReply = await renderer.postThreadReply(client, channel, threadTs, text, {
+        ...(includeToolbar && currentWorkspaceBranch
+          ? { workspaceBranch: currentWorkspaceBranch }
+          : {}),
+        ...(includeToolbar && currentWorkspaceLabel
+          ? { workspaceLabel: currentWorkspaceLabel }
+          : {}),
+        ...(includeToolbar && currentWorkspacePullRequestNumber
+          ? { workspacePullRequestNumber: currentWorkspacePullRequestNumber }
+          : {}),
+        ...(includeToolbar && currentWorkspacePullRequestUrl
+          ? { workspacePullRequestUrl: currentWorkspacePullRequestUrl }
+          : {}),
+      });
+      if (postedReply) {
+        lastAssistantReply = postedReply;
+        if (includeToolbar) {
+          toolbarReply = postedReply;
+        }
+      }
+      hasSentToolbarInTurn = true;
+    } catch (error) {
+      logger.warn('Failed to post assistant thread reply: %s', String(error));
+    }
+    await flushPendingAssistantAttachments();
   };
 
   const handleAssistantMessage = async (text: string): Promise<void> => {
@@ -610,6 +663,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
               await safeRender('set waiting-for-user-input UI state', () =>
                 renderer.setUiState(client, channel, {
                   threadTs,
+                  sessionStatus: 'suspended',
                   status: 'Waiting for your reply...',
                   loadingMessages: [
                     requestOptions?.title ?? 'Waiting for your reply in Slack...',
@@ -670,16 +724,38 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
             requestOptions?: {
               signal?: AbortSignal | undefined;
             },
-          ): Promise<AgentPermissionResponse> =>
-            permissionBridge.requestPermission(client, {
-              channelId: channel,
-              description: request.description,
-              expectedUserId: userId,
-              input: request.input,
-              signal: requestOptions?.signal,
-              threadTs,
-              toolName: request.toolName,
-            }),
+          ): Promise<AgentPermissionResponse> => {
+            const defaultState = createDefaultThinkingState(threadTs);
+            await safeRender('set awaiting-permission UI state', () =>
+              renderer.setUiState(client, channel, {
+                threadTs,
+                sessionStatus: 'suspended',
+                status: 'Waiting for your approval...',
+                loadingMessages: [truncateForSlackUi(request.toolName)],
+                clear: false,
+              }),
+            );
+            try {
+              return await permissionBridge.requestPermission(client, {
+                channelId: channel,
+                description: request.description,
+                expectedUserId: userId,
+                input: request.input,
+                signal: requestOptions?.signal,
+                threadTs,
+                toolName: request.toolName,
+              });
+            } finally {
+              await safeRender('restore default thinking UI state', () =>
+                renderer.setUiState(client, channel, {
+                  threadTs: defaultState.threadTs,
+                  status: defaultState.status,
+                  loadingMessages: defaultState.activities,
+                  clear: false,
+                }),
+              );
+            }
+          },
         }
       : {}),
 
@@ -694,6 +770,10 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     async onEvent(event: AgentExecutionEvent): Promise<void> {
       if (event.type === 'workspace-context') {
         await handleWorkspaceContext(event);
+        return;
+      }
+      if (event.type === 'assistant-message-delta') {
+        handleAssistantMessageDelta(event.text);
         return;
       }
       if (event.type === 'assistant-message') {
@@ -724,6 +804,22 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     },
 
     async finalize(): Promise<void> {
+      // A stopped or failed execution never delivers the terminating
+      // assistant-message, so close any open stream over the partial text.
+      const danglingStream = streamingReply;
+      streamingReply = undefined;
+      if (danglingStream && !danglingStream.failed) {
+        const streamedReply = await renderer
+          .finalizeStreamingReply(danglingStream)
+          .catch((err: unknown) => {
+            logger.warn('Failed to close dangling assistant stream: %s', String(err));
+            return undefined;
+          });
+        if (streamedReply) {
+          lastAssistantReply = streamedReply;
+          lastAssistantText ??= streamedReply.text;
+        }
+      }
       await maybeRefreshWorkspaceContext();
       await renderer.clearUiState(client, channel, threadTs).catch((err) => {
         logger.warn('Failed to clear UI state: %s', String(err));

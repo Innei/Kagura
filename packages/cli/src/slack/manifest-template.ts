@@ -13,6 +13,16 @@ export interface SlackManifestShortcut {
   type: 'global' | 'message';
 }
 
+export interface SlackManifestSuggestedPrompt {
+  message: string;
+  title: string;
+}
+
+export interface SlackManifestAgentView {
+  agent_description: string;
+  suggested_prompts?: SlackManifestSuggestedPrompt[];
+}
+
 export interface SlackManifest {
   display_information: { name: string };
   features: {
@@ -24,6 +34,7 @@ export interface SlackManifest {
     };
     slash_commands: SlackManifestSlashCommand[];
     shortcuts: SlackManifestShortcut[];
+    agent_view: SlackManifestAgentView;
   };
   oauth_config: { scopes: { bot: string[] } };
   settings: {
@@ -83,6 +94,7 @@ export const DESIRED_SHORTCUTS: SlackManifestShortcut[] = [
 ];
 
 export const DESIRED_BOT_EVENTS = [
+  'agent_session_stopped',
   'app_home_opened',
   'message.channels',
   'message.groups',
@@ -110,6 +122,21 @@ export const DESIRED_BOT_SCOPES = [
   'users:read.email',
 ];
 
+export const DESIRED_AGENT_VIEW: SlackManifestAgentView = {
+  agent_description: 'Runs coding agents in your repos and reports back in the thread.',
+  suggested_prompts: [
+    {
+      title: 'Summarize a thread',
+      message: 'Please summarize the latest discussion in this thread.',
+    },
+    {
+      title: 'Review code changes',
+      message: 'Please review the recent code changes and call out risks.',
+    },
+    { title: 'Draft a plan', message: 'Please create an implementation plan for this task.' },
+  ],
+};
+
 export function buildManifest(opts: { appName: string; botDisplayName: string }): SlackManifest {
   return {
     display_information: { name: opts.appName },
@@ -122,6 +149,7 @@ export function buildManifest(opts: { appName: string; botDisplayName: string })
       },
       slash_commands: DESIRED_COMMANDS,
       shortcuts: DESIRED_SHORTCUTS,
+      agent_view: DESIRED_AGENT_VIEW,
     },
     oauth_config: { scopes: { bot: DESIRED_BOT_SCOPES } },
     settings: {

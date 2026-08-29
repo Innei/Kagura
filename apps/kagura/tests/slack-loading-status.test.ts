@@ -242,23 +242,13 @@ describe('Slack loading status test', () => {
 
     expect(statusCalls[0]).toMatchObject({
       channel_id: 'C123',
-      loading_messages: expect.arrayContaining([expect.any(String)]),
-      status: 'is thinking...',
+      status: 'processing',
       thread_ts: threadTs,
     });
-    expect(statusCalls).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          channel_id: 'C123',
-          status: '',
-          thread_ts: threadTs,
-        }),
-      ]),
-    );
     expect(statusCalls.at(-1)).toEqual(
       expect.objectContaining({
         channel_id: 'C123',
-        status: '',
+        status: 'active',
         thread_ts: threadTs,
       }),
     );
@@ -640,15 +630,14 @@ describe('Slack loading status test', () => {
 
     expect(statusCalls[0]).toMatchObject({
       channel_id: 'C123',
-      loading_messages: expect.arrayContaining([expect.any(String)]),
-      status: 'is thinking...',
+      status: 'processing',
       thread_ts: threadTs,
     });
     expect(statusCalls).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           channel_id: 'C123',
-          status: '',
+          status: 'active',
           thread_ts: threadTs,
         }),
       ]),
@@ -1038,7 +1027,6 @@ function createSlackClientFixture({ threadTs }: { threadTs: string }): {
   removeReactionCalls: Array<{ channel: string; name: string; timestamp: string }>;
   statusCalls: Array<{
     channel_id: string;
-    loading_messages?: string[];
     status: string;
     thread_ts: string;
   }>;
@@ -1050,7 +1038,6 @@ function createSlackClientFixture({ threadTs }: { threadTs: string }): {
   const removeReactionCalls: Array<{ channel: string; name: string; timestamp: string }> = [];
   const statusCalls: Array<{
     channel_id: string;
-    loading_messages?: string[];
     status: string;
     thread_ts: string;
   }> = [];
@@ -1058,13 +1045,11 @@ function createSlackClientFixture({ threadTs }: { threadTs: string }): {
     [];
 
   const client: SlackWebClientLike = {
-    assistant: {
-      threads: {
-        setStatus: async (args) => {
-          statusCalls.push(args);
-          return {};
-        },
-      },
+    apiCall: async (method, args) => {
+      if (method === 'agents.sessions.setStatus') {
+        statusCalls.push(args as (typeof statusCalls)[number]);
+      }
+      return {};
     },
     auth: {
       test: async () => ({ user: 'kagura', user_id: 'U_BOT' }),

@@ -46,7 +46,10 @@ export async function resolveThreadReplyRoute(
   options: ThreadReplyRoutingOptions = {},
 ): Promise<ThreadReplyRoute> {
   const threadTs = message.thread_ts;
-  const mentionsCurrentBot = mentionsUser(message.text, identity.botUserId);
+  // Under agent_view an agent DM arrives as an ordinary message with no
+  // mention, so a direct message is addressed to this app by construction.
+  const isDirectMessage = message.channel_type === 'im';
+  const mentionsCurrentBot = isDirectMessage || mentionsUser(message.text, identity.botUserId);
   const coordinationDecision = resolveMentionCoordinationDecision(
     message.text,
     {
@@ -71,7 +74,9 @@ export async function resolveThreadReplyRoute(
 
   if (!threadTs) {
     const route = resolveRootMessageRoute(deps, message, identity, {
-      addAcknowledgementReaction: options.rootAddAcknowledgementReaction ?? true,
+      addAcknowledgementReaction: isDirectMessage
+        ? false
+        : (options.rootAddAcknowledgementReaction ?? true),
       shouldRun: coordinationDecision.action === 'run' || mentionsCurrentBot,
     });
     if (!rootA2AContext || route.action !== 'dispatch') {

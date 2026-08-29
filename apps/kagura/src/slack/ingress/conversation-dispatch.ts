@@ -1,3 +1,4 @@
+import { setAgentSessionStatus } from '../agent-sessions.js';
 import type { SlackWebClientLike } from '../types.js';
 import { handleThreadConversation } from './conversation-pipeline.js';
 import type {
@@ -62,5 +63,29 @@ export async function dispatchThreadConversation(
     ...(input.workspaceOverride ? { workspaceOverride: input.workspaceOverride } : {}),
   };
 
+  await nameNewAgentSession(client, deps, input);
   await handleThreadConversation(client, message, deps, options);
+}
+
+// Replaces the Assistant surface's setTitle: the first turn of a thread names
+// the agent session so it is recognizable in the sessions sidebar.
+async function nameNewAgentSession(
+  client: SlackWebClientLike,
+  deps: SlackIngressDependencies,
+  input: ConversationDispatchInput,
+): Promise<void> {
+  const threadTs = input.threadTs ?? input.rootMessageTs;
+  const title = input.text.trim();
+  if (!title || deps.sessionStore.get(threadTs)) {
+    return;
+  }
+
+  await setAgentSessionStatus(client, {
+    channelId: input.channelId,
+    status: 'processing',
+    threadTs,
+    title,
+  }).catch((error: unknown) => {
+    deps.logger.warn('Failed to name agent session for thread %s: %s', threadTs, String(error));
+  });
 }
