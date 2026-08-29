@@ -33,6 +33,7 @@ import { createHomeTabHandler, HOME_TAB_REFRESH_ACTION_ID } from './ingress/home
 import { createReactionStopHandler } from './ingress/reaction-stop-handler.js';
 import { startA2ASummaryPoller } from './ingress/scenarios/a2a/summary-runner.js';
 import { createThreadReplyHandler } from './ingress/thread-reply-handler.js';
+import type { ThreadTitleGenerator } from './ingress/thread-title-generator.js';
 import { WORKSPACE_PICKER_ACTION_ID } from './ingress/workspace-resolution.js';
 import type { SlackPermissionBridge } from './interaction/permission-bridge.js';
 import {
@@ -75,6 +76,7 @@ export interface SlackApplicationDependencies {
   sessionStore: SessionStore;
   statusProbe?: SlackStatusProbe;
   threadExecutionRegistry: ThreadExecutionRegistry;
+  threadTitleGenerator?: ThreadTitleGenerator | undefined;
   threadWorkspaceManager?: ThreadWorkspaceManager | undefined;
   userInputBridge: SlackUserInputBridge;
   workspaceResolver: WorkspaceResolver;
@@ -139,6 +141,7 @@ export function createSlackApp(
     reviewPanelBaseUrl: deps.reviewPanelBaseUrl,
     reviewSessionStore: deps.reviewSessionStore,
     threadExecutionRegistry: deps.threadExecutionRegistry,
+    threadTitleGenerator: deps.threadTitleGenerator,
     threadWorkspaceManager: deps.threadWorkspaceManager,
     userInputBridge: deps.userInputBridge,
     workspaceResolver: deps.workspaceResolver,

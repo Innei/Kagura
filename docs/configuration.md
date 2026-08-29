@@ -67,6 +67,13 @@ Example:
   "repoRootDir": "~/git",
   "slack": {
     "taskCardBlocksEnabled": false,
+    "threadTitle": {
+      "enabled": true,
+      "baseUrl": "https://api.openai.com/v1",
+      "model": "gpt-5.6-luna",
+      "timeoutMs": 8000,
+      "maxTokens": 80
+    },
     "threadHistoryLimit": 200
   },
   "worktreeRootDir": "~/git/kagura-worktrees"
@@ -80,6 +87,8 @@ Provider model defaults come from `claude.model`, `codex.model`, and `piAgent.mo
 For long Slack threads, `slack.threadHistoryLimit` controls the maximum number of Slack replies Kagura fetches for transcript context. The default is `200`. On resumed sessions Kagura only injects messages that appeared since the previous turn, but the provider's own persisted session can still grow over time. If a long provider session starts timing out repeatedly, use `/model reset` in that thread to clear the session handle, then continue or move durable facts into memory and start a new thread.
 
 `slack.taskCardBlocksEnabled` controls whether progress task updates render as Slack native plan/task-card blocks. The default is `false`, so progress messages use regular context text while still showing the current task title/details. Set it to `true` to opt into Slack native plan/task-card blocks.
+
+`slack.threadTitle` controls small-model naming for new Slack agent sessions. It is enabled by default. When `KAGURA_THREAD_TITLE_API_KEY` or `KAGURA_MEMORY_RECONCILER_API_KEY` is available, Kagura asks the configured OpenAI-compatible model for a concise title and calls Slack `agents.sessions.rename`. Without a key, or if generation fails, Kagura falls back to cleaned user text and still starts the agent session normally.
 
 `agentTeams` maps Slack user group IDs (`<!subteam^S...>`) to bot user IDs. `members` can be a list of bot user ID strings or objects with `id`, optional `label`, and optional `role`. Labels and roles are shown in the A2A prompt roster so agents know which peer to mention for implementation, review, or other delegated work. When a message mentions a configured team, only `defaultLead` starts an Agent run; other configured members stay idle until the lead or user explicitly mentions them later in the thread.
 
@@ -220,6 +229,19 @@ Background loop that prunes expired memories and consolidates dirty buckets via 
 | `KAGURA_MEMORY_RECONCILER_BATCH_SIZE`      | `50`                        | Max records per bucket sent to the LLM in one call.                                                                                                                |
 | `KAGURA_MEMORY_RECONCILER_TIMEOUT_MS`      | `30000`                     | Per-LLM-call timeout.                                                                                                                                              |
 | `KAGURA_MEMORY_RECONCILER_MAX_TOKENS`      | `1024`                      | Max tokens for the LLM response.                                                                                                                                   |
+
+### Thread title naming
+
+New Slack agent sessions are renamed before the main provider starts. The LLM call is best-effort and non-blocking for the main turn: failures are logged and Kagura falls back to cleaned user text.
+
+| Env var                          | Default                     | Description                                                                                                          |
+| -------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `KAGURA_THREAD_TITLE_ENABLED`    | `true`                      | Enable small-model title generation for new Slack agent sessions.                                                    |
+| `KAGURA_THREAD_TITLE_API_KEY`    | (env-only, optional)        | Bearer token for the OpenAI-compatible API. If unset, Kagura reuses `KAGURA_MEMORY_RECONCILER_API_KEY` when present. |
+| `KAGURA_THREAD_TITLE_BASE_URL`   | `https://api.openai.com/v1` | Base URL of the chat completions endpoint.                                                                           |
+| `KAGURA_THREAD_TITLE_MODEL`      | `gpt-5.6-luna`              | Model name passed to the API. Use a cheap, low-latency model.                                                        |
+| `KAGURA_THREAD_TITLE_TIMEOUT_MS` | `8000`                      | Per-title-generation timeout.                                                                                        |
+| `KAGURA_THREAD_TITLE_MAX_TOKENS` | `80`                        | Max tokens for the title JSON response.                                                                              |
 
 `KAGURA_MEMORY_RECONCILER_API_KEY` is the only memory-reconciler key that does **not** fall back to `config.json` — it is env-only for security. The remaining keys can be set via either env or `~/.config/kagura/config.json`:
 

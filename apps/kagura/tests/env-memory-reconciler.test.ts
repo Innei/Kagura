@@ -11,6 +11,11 @@ describe('memory reconciler env defaults', () => {
     expect(env.KAGURA_MEMORY_RECONCILER_BATCH_SIZE).toBe(50);
     expect(env.KAGURA_MEMORY_RECONCILER_TIMEOUT_MS).toBe(30_000);
     expect(env.KAGURA_MEMORY_RECONCILER_MAX_TOKENS).toBe(1024);
+    expect(env.KAGURA_THREAD_TITLE_ENABLED).toBe(true);
+    expect(env.KAGURA_THREAD_TITLE_BASE_URL).toBe('https://api.openai.com/v1');
+    expect(env.KAGURA_THREAD_TITLE_MODEL).toBe('gpt-5.6-luna');
+    expect(env.KAGURA_THREAD_TITLE_TIMEOUT_MS).toBe(8_000);
+    expect(env.KAGURA_THREAD_TITLE_MAX_TOKENS).toBe(80);
   });
 
   it('treats empty API_KEY as undefined', async () => {

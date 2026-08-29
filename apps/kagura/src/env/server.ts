@@ -94,6 +94,16 @@ const appConfigSchema = z
     slack: z
       .object({
         taskCardBlocksEnabled: z.boolean().optional(),
+        threadTitle: z
+          .object({
+            enabled: z.boolean().optional(),
+            baseUrl: z.string().url().optional(),
+            model: z.string().min(1).optional(),
+            timeoutMs: z.number().int().positive().optional(),
+            maxTokens: z.number().int().positive().optional(),
+          })
+          .strict()
+          .optional(),
         threadHistoryLimit: z.number().int().positive().max(1000).optional(),
       })
       .strict()
@@ -145,6 +155,13 @@ export const appConfigAgentTeams: AppConfigAgentTeams = appConfig.agentTeams ?? 
 export const appRuntimeConfig = {
   slack: {
     taskCardBlocksEnabled: appConfig.slack?.taskCardBlocksEnabled ?? false,
+    threadTitle: {
+      enabled: appConfig.slack?.threadTitle?.enabled ?? true,
+      baseUrl: appConfig.slack?.threadTitle?.baseUrl,
+      model: appConfig.slack?.threadTitle?.model,
+      timeoutMs: appConfig.slack?.threadTitle?.timeoutMs,
+      maxTokens: appConfig.slack?.threadTitle?.maxTokens,
+    },
     threadHistoryLimit: appConfig.slack?.threadHistoryLimit ?? 200,
   },
 } as const;
@@ -247,6 +264,12 @@ export const env = createEnv({
     KAGURA_MEMORY_RECONCILER_BATCH_SIZE: z.coerce.number().int().positive().default(50),
     KAGURA_MEMORY_RECONCILER_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
     KAGURA_MEMORY_RECONCILER_MAX_TOKENS: z.coerce.number().int().positive().default(1024),
+    KAGURA_THREAD_TITLE_ENABLED: booleanStringSchema.default(true),
+    KAGURA_THREAD_TITLE_BASE_URL: z.string().url().default('https://api.openai.com/v1'),
+    KAGURA_THREAD_TITLE_API_KEY: z.string().min(1).optional(),
+    KAGURA_THREAD_TITLE_MODEL: z.string().min(1).default('gpt-5.6-luna'),
+    KAGURA_THREAD_TITLE_TIMEOUT_MS: z.coerce.number().int().positive().default(8_000),
+    KAGURA_THREAD_TITLE_MAX_TOKENS: z.coerce.number().int().positive().default(80),
     KAGURA_REVIEW_PANEL_ENABLED: booleanStringSchema.default(false),
     KAGURA_REVIEW_PANEL_HOST: z.string().min(1).default('127.0.0.1'),
     KAGURA_REVIEW_PANEL_PORT: z.coerce.number().int().positive().default(3077),
@@ -352,6 +375,27 @@ export const env = createEnv({
     KAGURA_MEMORY_RECONCILER_MAX_TOKENS: envOrConfig(
       'KAGURA_MEMORY_RECONCILER_MAX_TOKENS',
       configNumber(appConfig.memory?.reconciler?.maxTokens),
+    ),
+    KAGURA_THREAD_TITLE_ENABLED: envOrConfig(
+      'KAGURA_THREAD_TITLE_ENABLED',
+      configBoolean(appConfig.slack?.threadTitle?.enabled),
+    ),
+    KAGURA_THREAD_TITLE_BASE_URL: envOrConfig(
+      'KAGURA_THREAD_TITLE_BASE_URL',
+      configString(appConfig.slack?.threadTitle?.baseUrl),
+    ),
+    KAGURA_THREAD_TITLE_API_KEY: process.env.KAGURA_THREAD_TITLE_API_KEY,
+    KAGURA_THREAD_TITLE_MODEL: envOrConfig(
+      'KAGURA_THREAD_TITLE_MODEL',
+      configString(appConfig.slack?.threadTitle?.model),
+    ),
+    KAGURA_THREAD_TITLE_TIMEOUT_MS: envOrConfig(
+      'KAGURA_THREAD_TITLE_TIMEOUT_MS',
+      configNumber(appConfig.slack?.threadTitle?.timeoutMs),
+    ),
+    KAGURA_THREAD_TITLE_MAX_TOKENS: envOrConfig(
+      'KAGURA_THREAD_TITLE_MAX_TOKENS',
+      configNumber(appConfig.slack?.threadTitle?.maxTokens),
     ),
     KAGURA_REVIEW_PANEL_ENABLED: envOrConfig(
       'KAGURA_REVIEW_PANEL_ENABLED',

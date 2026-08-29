@@ -25,6 +25,7 @@ import type { A2ACoordinatorStore } from './a2a-coordinator-store.js';
 import type { A2AOutputMode, QuietAssistantMessageRecorder } from './a2a-output-diagnostics.js';
 import type { AgentTeamsConfig } from './agent-team-routing.js';
 import type { A2AThreadContext } from './scenarios/a2a/routing.js';
+import type { ThreadTitleGenerator } from './thread-title-generator.js';
 
 export interface SlackIngressDependencies {
   a2aCoordinatorStore?: A2ACoordinatorStore | undefined;
@@ -46,6 +47,7 @@ export interface SlackIngressDependencies {
   sessionStore: SessionStore;
   threadContextLoader: SlackThreadContextLoader;
   threadExecutionRegistry: ThreadExecutionRegistry;
+  threadTitleGenerator?: ThreadTitleGenerator | undefined;
   threadWorkspaceManager?: ThreadWorkspaceManager | undefined;
   userInputBridge: SlackUserInputBridge;
   workspaceResolver: WorkspaceResolver;

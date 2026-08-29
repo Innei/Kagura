@@ -7,6 +7,12 @@ delete process.env.KAGURA_MEMORY_RECONCILER_WRITE_THRESHOLD;
 delete process.env.KAGURA_MEMORY_RECONCILER_BATCH_SIZE;
 delete process.env.KAGURA_MEMORY_RECONCILER_TIMEOUT_MS;
 delete process.env.KAGURA_MEMORY_RECONCILER_MAX_TOKENS;
+delete process.env.KAGURA_THREAD_TITLE_ENABLED;
+delete process.env.KAGURA_THREAD_TITLE_BASE_URL;
+delete process.env.KAGURA_THREAD_TITLE_API_KEY;
+delete process.env.KAGURA_THREAD_TITLE_MODEL;
+delete process.env.KAGURA_THREAD_TITLE_TIMEOUT_MS;
+delete process.env.KAGURA_THREAD_TITLE_MAX_TOKENS;
 
 Object.assign(process.env, {
   NODE_ENV: 'test',

@@ -39,6 +39,10 @@ import { SqliteA2ACoordinatorStore } from '~/slack/ingress/a2a-coordinator-store
 import { FileQuietAssistantMessageRecorder } from '~/slack/ingress/a2a-output-diagnostics.js';
 import type { AgentTeamsConfig } from '~/slack/ingress/agent-team-routing.js';
 import type { ConversationDispatchInput } from '~/slack/ingress/conversation-dispatch.js';
+import {
+  LlmThreadTitleGenerator,
+  type ThreadTitleGenerator,
+} from '~/slack/ingress/thread-title-generator.js';
 import { SlackPermissionBridge } from '~/slack/interaction/permission-bridge.js';
 import { SlackUserInputBridge } from '~/slack/interaction/user-input-bridge.js';
 import { startSlackAppWithRetry } from '~/slack/network-guard.js';
@@ -71,6 +75,7 @@ export interface RuntimeApplicationOptions {
   skipManifestSync?: boolean | undefined;
   slackCredentials?: SlackAppCredentials | undefined;
   statusProbePath?: string | undefined;
+  threadTitleGenerator?: ThreadTitleGenerator | undefined;
 }
 
 export function createApplication(options?: RuntimeApplicationOptions): RuntimeApplication {
@@ -126,6 +131,28 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
           maxTokens: env.KAGURA_MEMORY_RECONCILER_MAX_TOKENS,
         })
       : undefined;
+
+  const threadTitleApiKey =
+    env.KAGURA_THREAD_TITLE_API_KEY?.trim() || env.KAGURA_MEMORY_RECONCILER_API_KEY?.trim();
+  const threadTitleGenerator =
+    options?.threadTitleGenerator ??
+    (env.KAGURA_THREAD_TITLE_ENABLED && threadTitleApiKey
+      ? new LlmThreadTitleGenerator(
+          new OpenAICompatibleClient({
+            baseUrl: env.KAGURA_THREAD_TITLE_BASE_URL,
+            apiKey: threadTitleApiKey,
+            model: env.KAGURA_THREAD_TITLE_MODEL,
+            timeoutMs: env.KAGURA_THREAD_TITLE_TIMEOUT_MS,
+            maxTokens: env.KAGURA_THREAD_TITLE_MAX_TOKENS,
+          }),
+        )
+      : undefined);
+
+  if (env.KAGURA_THREAD_TITLE_ENABLED && !threadTitleApiKey) {
+    logger.info(
+      'KAGURA_THREAD_TITLE_ENABLED=true but no KAGURA_THREAD_TITLE_API_KEY or KAGURA_MEMORY_RECONCILER_API_KEY is configured; using fallback thread titles.',
+    );
+  }
 
   const memoryIngestionLlm = options?.memoryIngestionLlm ?? memoryReconcilerLlm;
   const memoryIngestionService = memoryIngestionLlm
@@ -232,6 +259,7 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
       sessionStore,
       providerRegistry,
       threadExecutionRegistry,
+      ...(threadTitleGenerator ? { threadTitleGenerator } : {}),
       threadWorkspaceManager,
       userInputBridge,
       workspaceResolver,

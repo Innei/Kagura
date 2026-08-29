@@ -1,6 +1,7 @@
-import { setAgentSessionStatus } from '../agent-sessions.js';
+import { renameAgentSession, setAgentSessionStatus } from '../agent-sessions.js';
 import type { SlackWebClientLike } from '../types.js';
 import { handleThreadConversation } from './conversation-pipeline.js';
+import { fallbackThreadTitle } from './thread-title-generator.js';
 import type {
   SlackIngressDependencies,
   ThreadConversationMessage,
@@ -67,25 +68,54 @@ export async function dispatchThreadConversation(
   await handleThreadConversation(client, message, deps, options);
 }
 
-// Replaces the Assistant surface's setTitle: the first turn of a thread names
-// the agent session so it is recognizable in the sessions sidebar.
+// The first turn names the Slack agent session so it is recognizable in the
+// sessions timeline and thread header.
 async function nameNewAgentSession(
   client: SlackWebClientLike,
   deps: SlackIngressDependencies,
   input: ConversationDispatchInput,
 ): Promise<void> {
   const threadTs = input.threadTs ?? input.rootMessageTs;
-  const title = input.text.trim();
-  if (!title || deps.sessionStore.get(threadTs)) {
+  if (deps.sessionStore.get(threadTs)) {
     return;
   }
+
+  let title = fallbackThreadTitle({ text: input.text, files: input.files });
+  if (deps.threadTitleGenerator) {
+    try {
+      title =
+        (await deps.threadTitleGenerator.generate({ text: input.text, files: input.files })) ??
+        title;
+    } catch (error) {
+      deps.logger.warn(
+        'Failed to generate agent session title for thread %s: %s',
+        threadTs,
+        String(error),
+      );
+    }
+  }
+
+  if (!title) {
+    return;
+  }
+
+  await renameAgentSession(client, {
+    channelId: input.channelId,
+    threadTs,
+    title,
+  }).catch((error: unknown) => {
+    deps.logger.warn('Failed to name agent session for thread %s: %s', threadTs, String(error));
+  });
 
   await setAgentSessionStatus(client, {
     channelId: input.channelId,
     status: 'processing',
     threadTs,
-    title,
   }).catch((error: unknown) => {
-    deps.logger.warn('Failed to name agent session for thread %s: %s', threadTs, String(error));
+    deps.logger.warn(
+      'Failed to set initial agent session status for thread %s: %s',
+      threadTs,
+      String(error),
+    );
   });
 }

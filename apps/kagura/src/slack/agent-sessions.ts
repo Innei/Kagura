@@ -21,6 +21,22 @@ export async function setAgentSessionStatus(
     channel_id: args.channelId,
     thread_ts: args.threadTs,
     status: args.status,
-    ...(args.title ? { title: args.title.slice(0, TITLE_MAX_LENGTH) } : {}),
+  });
+}
+
+export interface RenameAgentSessionArgs {
+  channelId: string;
+  threadTs: string;
+  title: string;
+}
+
+export async function renameAgentSession(
+  client: SlackWebClientLike,
+  args: RenameAgentSessionArgs,
+): Promise<void> {
+  await client.apiCall('agents.sessions.rename', {
+    channel_id: args.channelId,
+    thread_ts: args.threadTs,
+    title: args.title.slice(0, TITLE_MAX_LENGTH),
   });
 }
