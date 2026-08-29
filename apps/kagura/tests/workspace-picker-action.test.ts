@@ -311,7 +311,6 @@ function createSlackClientFixture(): {
   postMessageCalls: Array<Parameters<SlackWebClientLike['chat']['postMessage']>[0]>;
   statusCalls: Array<{
     channel_id: string;
-    loading_messages?: string[];
     status: string;
     thread_ts: string;
   }>;
@@ -321,20 +320,17 @@ function createSlackClientFixture(): {
   const postMessageCalls: Array<Parameters<SlackWebClientLike['chat']['postMessage']>[0]> = [];
   const statusCalls: Array<{
     channel_id: string;
-    loading_messages?: string[];
     status: string;
     thread_ts: string;
   }> = [];
   const viewOpenCalls: Array<{ trigger_id: string; view: unknown }> = [];
 
   const client: SlackWebClientLike = {
-    assistant: {
-      threads: {
-        setStatus: async (args) => {
-          statusCalls.push(args);
-          return {};
-        },
-      },
+    apiCall: async (method, args) => {
+      if (method === 'agents.sessions.setStatus') {
+        statusCalls.push(args as (typeof statusCalls)[number]);
+      }
+      return {};
     },
     auth: {
       test: async () => ({ user: 'kagura', user_id: 'U_BOT' }),

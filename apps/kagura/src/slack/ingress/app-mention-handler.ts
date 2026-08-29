@@ -1,7 +1,3 @@
-export {
-  createAssistantThreadStartedHandler,
-  createAssistantUserMessageHandler,
-} from './assistant-message-handler.js';
 export { handleThreadConversation } from './conversation-pipeline.js';
 export { startA2ASummaryPoller } from './scenarios/a2a/summary-runner.js';
 export { createThreadReplyHandler } from './thread-reply-handler.js';

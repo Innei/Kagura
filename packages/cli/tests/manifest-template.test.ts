@@ -19,7 +19,13 @@ describe('manifest-template', () => {
     );
     expect(DESIRED_SHORTCUTS.map((s) => s.callback_id)).toContain('stop_reply_action');
     expect([...DESIRED_BOT_EVENTS].sort()).toEqual(
-      ['app_home_opened', 'message.channels', 'message.groups', 'message.im'].sort(),
+      [
+        'agent_session_stopped',
+        'app_home_opened',
+        'message.channels',
+        'message.groups',
+        'message.im',
+      ].sort(),
     );
   });
 });

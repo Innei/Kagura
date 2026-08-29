@@ -252,7 +252,7 @@ function assertResult(result: PlanBlockProgressResult): void {
 
 function createRendererSlackClient(botClient: SlackApiClient): SlackWebClientLike {
   return {
-    assistant: { threads: { setStatus: async () => ({}) } },
+    apiCall: async () => ({}),
     chat: {
       delete: async () => ({}),
       postMessage: (args) => {

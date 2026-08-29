@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'node:url';
+
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
@@ -6,6 +8,9 @@ export default defineConfig({
     __GIT_COMMIT_DATE__: JSON.stringify('2026-01-01T00:00:00+00:00'),
   },
   resolve: {
+    // tsconfig.json only includes src/**, so tsconfigPaths does not map `~/*`
+    // for importers under tests/.
+    alias: { '~': fileURLToPath(new URL('./src', import.meta.url)) },
     tsconfigPaths: true,
   },
   test: {

@@ -131,6 +131,10 @@ export type AgentExecutionEvent =
       text: string;
     }
   | {
+      type: 'assistant-message-delta';
+      text: string;
+    }
+  | {
       type: 'workspace-context';
       workspaceLabel?: string | undefined;
       workspacePath: string;

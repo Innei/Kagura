@@ -11,6 +11,7 @@ import type {
 import { env } from '~/env/server.js';
 import type { AppLogger } from '~/logger/index.js';
 
+import { type AgentSessionStatus, setAgentSessionStatus } from '../agent-sessions.js';
 import {
   DEFAULT_ASSISTANT_THINKING_STATUS,
   getShuffledThinkingMessages,
@@ -25,6 +26,7 @@ import type {
   SlackWebClientLike,
 } from '../types.js';
 import type { SlackStatusProbe } from './status-probe.js';
+import { StreamingReply } from './streaming-reply.js';
 
 const THINKING_STATUS_ROTATION_INTERVAL_MS = 2500;
 
@@ -34,23 +36,18 @@ function isThinkingStatus(status: string | undefined): boolean {
   return !status || status === DEFAULT_ASSISTANT_THINKING_STATUS || THINKING_STATUS_SET.has(status);
 }
 
-// Slack renders `assistant.threads.setStatus` output as "{AppName} {status}"
-// and each `loading_messages` entry the same way — it does NOT auto-prepend
-// "is". Wrap each fragment with a leading "is " (and lowercase the first
-// letter) so it reads as "cc-001 is turning the question over..." instead of
-// "cc-001 Turning the question over...".
-function toSlackStatusFragment(text: string): string {
-  if (!text) return text;
-  if (text.startsWith('is ')) return text;
-  const first = text.charCodeAt(0);
-  const head = first >= 65 && first <= 90 ? text[0]!.toLowerCase() : text[0]!;
-  return `is ${head}${text.slice(1)}`;
+interface ThinkingRotationContext {
+  channelId: string;
+  client: SlackWebClientLike;
+  progressMessageTs: string;
+  state: RendererUiState;
 }
 
 interface RendererUiState {
   clear: boolean;
   composing?: boolean | undefined;
   loadingMessages?: string[] | undefined;
+  sessionStatus?: AgentSessionStatus | undefined;
   status?: string | undefined;
   taskCardBlocksEnabled?: boolean | undefined;
   tasks?: ProgressTask[] | undefined;
@@ -87,6 +84,7 @@ export class SlackRenderTimeoutError extends Error {
 export class SlackRenderer {
   private readonly operationTimeoutMs: number;
   private readonly activeThinkingRotations = new Map<string, ReturnType<typeof setInterval>>();
+  private readonly thinkingRotationContexts = new Map<string, ThinkingRotationContext>();
 
   constructor(
     private readonly logger: AppLogger,
@@ -158,12 +156,30 @@ export class SlackRenderer {
     let rotationIndex = 0;
     const timer = setInterval(() => {
       rotationIndex++;
-      const status = toSlackStatusFragment(rotateThinkingStatus(rotationIndex));
-      client.assistant.threads
-        .setStatus({ channel_id: channelId, thread_ts: threadTs, status })
-        .catch(() => {});
+      void this.rotateProgressMessageStatus(threadTs, rotateThinkingStatus(rotationIndex));
     }, THINKING_STATUS_ROTATION_INTERVAL_MS);
     this.activeThinkingRotations.set(threadTs, timer);
+  }
+
+  // Agent sessions accept only the lifecycle enum, so the rotating flavor text
+  // lives in the progress message instead. Until the first progress message is
+  // posted there is nothing to rotate and the tick is a no-op.
+  private async rotateProgressMessageStatus(threadTs: string, status: string): Promise<void> {
+    const context = this.thinkingRotationContexts.get(threadTs);
+    if (!context || context.state.tasks?.length) {
+      return;
+    }
+
+    const state: RendererUiState = { ...context.state, status };
+    context.state = state;
+    await context.client.chat
+      .update({
+        channel: context.channelId,
+        ts: context.progressMessageTs,
+        text: this.buildProgressMessageText(state),
+        blocks: this.buildProgressMessageBlocks(state),
+      })
+      .catch(() => {});
   }
 
   private stopThinkingRotation(threadTs: string): void {
@@ -172,6 +188,7 @@ export class SlackRenderer {
       clearInterval(timer);
       this.activeThinkingRotations.delete(threadTs);
     }
+    this.thinkingRotationContexts.delete(threadTs);
   }
 
   async setUiState(
@@ -188,17 +205,16 @@ export class SlackRenderer {
       return;
     }
 
-    const renderedStatus = toSlackStatusFragment(state.status ?? '');
-    const renderedLoadingMessages = state.loadingMessages?.map(toSlackStatusFragment);
+    const renderedStatus = state.status ?? '';
+    const renderedLoadingMessages = state.loadingMessages;
     await this.withSlackTiming(
-      'assistant.threads.setStatus',
+      'agents.sessions.setStatus',
       `channel=${channelId} thread=${state.threadTs} clear=false status=${JSON.stringify(renderedStatus)} loadingMessages=${renderedLoadingMessages?.length ?? 0}`,
       async () =>
-        client.assistant.threads.setStatus({
-          channel_id: channelId,
-          thread_ts: state.threadTs,
-          status: renderedStatus,
-          ...(renderedLoadingMessages ? { loading_messages: renderedLoadingMessages } : {}),
+        setAgentSessionStatus(client, {
+          channelId,
+          status: state.sessionStatus ?? 'processing',
+          threadTs: state.threadTs,
         }),
     );
     await this.statusProbe?.recordStatus({
@@ -220,14 +236,9 @@ export class SlackRenderer {
     this.stopThinkingRotation(threadTs);
 
     await this.withSlackTiming(
-      'assistant.threads.setStatus',
+      'agents.sessions.setStatus',
       `channel=${channelId} thread=${threadTs} clear=true`,
-      async () =>
-        client.assistant.threads.setStatus({
-          channel_id: channelId,
-          thread_ts: threadTs,
-          status: '',
-        }),
+      async () => setAgentSessionStatus(client, { channelId, status: 'active', threadTs }),
     );
     await this.statusProbe?.recordStatus({
       channelId,
@@ -255,6 +266,7 @@ export class SlackRenderer {
 
     const text = this.buildProgressMessageText(state);
     const blocks = this.buildProgressMessageBlocks(state);
+    this.trackThinkingRotationTarget(client, channelId, threadTs, state, progressMessageTs);
 
     if (progressMessageTs) {
       await this.withSlackTiming(
@@ -302,7 +314,24 @@ export class SlackRenderer {
       threadTs,
     });
 
+    if (response.ts) {
+      this.trackThinkingRotationTarget(client, channelId, threadTs, state, response.ts);
+    }
+
     return response.ts;
+  }
+
+  private trackThinkingRotationTarget(
+    client: SlackWebClientLike,
+    channelId: string,
+    threadTs: string,
+    state: RendererUiState,
+    progressMessageTs: string | undefined,
+  ): void {
+    if (!progressMessageTs || !this.activeThinkingRotations.has(threadTs)) {
+      return;
+    }
+    this.thinkingRotationContexts.set(threadTs, { channelId, client, progressMessageTs, state });
   }
 
   async deleteThreadProgressMessage(
@@ -452,6 +481,34 @@ export class SlackRenderer {
     }
 
     return lastReply;
+  }
+
+  createStreamingReply(
+    client: SlackWebClientLike,
+    channelId: string,
+    threadTs: string,
+    recipient?: { teamId?: string | undefined; userId?: string | undefined },
+  ): StreamingReply {
+    return new StreamingReply(client, this.logger, {
+      channelId,
+      threadTs,
+      ...(recipient?.teamId ? { recipientTeamId: recipient.teamId } : {}),
+      ...(recipient?.userId ? { recipientUserId: recipient.userId } : {}),
+    });
+  }
+
+  // stopStream appends its blocks, so the toolbar that postThreadReply renders
+  // as a prefix lands at the end of a streamed reply instead.
+  async finalizeStreamingReply(
+    stream: StreamingReply,
+    options?: ThreadReplyContextOptions,
+  ): Promise<PostedThreadReply | undefined> {
+    const blocks = buildThreadReplyContextBlocks(options) as SlackBlock[];
+    const ts = await stream.finish(blocks);
+    if (!ts) {
+      return undefined;
+    }
+    return { blocks, text: stream.text, ts };
   }
 
   async updateThreadReplyWorkspaceContext(

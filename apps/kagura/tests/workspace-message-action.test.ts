@@ -226,13 +226,12 @@ describe('Workspace message action test', () => {
 
     expect(statusCalls.at(0)).toMatchObject({
       channel_id: 'C123',
-      loading_messages: expect.arrayContaining([expect.any(String)]),
-      status: 'is thinking...',
+      status: 'processing',
       thread_ts: '1712345678.000200',
     });
     expect(statusCalls.at(-1)).toEqual({
       channel_id: 'C123',
-      status: '',
+      status: 'active',
       thread_ts: '1712345678.000200',
     });
 
@@ -334,7 +333,6 @@ function createSlackClientFixture(): {
   postMessageCalls: Array<{ channel: string; text: string; thread_ts?: string }>;
   statusCalls: Array<{
     channel_id: string;
-    loading_messages?: string[];
     status: string;
     thread_ts: string;
   }>;
@@ -344,20 +342,17 @@ function createSlackClientFixture(): {
   const postMessageCalls: Array<{ channel: string; text: string; thread_ts?: string }> = [];
   const statusCalls: Array<{
     channel_id: string;
-    loading_messages?: string[];
     status: string;
     thread_ts: string;
   }> = [];
   const viewOpenCalls: Array<{ trigger_id: string; view: unknown }> = [];
 
   const client: SlackWebClientLike = {
-    assistant: {
-      threads: {
-        setStatus: async (args) => {
-          statusCalls.push(args);
-          return {};
-        },
-      },
+    apiCall: async (method, args) => {
+      if (method === 'agents.sessions.setStatus') {
+        statusCalls.push(args as (typeof statusCalls)[number]);
+      }
+      return {};
     },
     chat: {
       delete: async () => ({}),

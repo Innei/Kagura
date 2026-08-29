@@ -30,7 +30,7 @@ function createClientFixture(): {
   const imagePostCalls: Array<Parameters<SlackWebClientLike['chat']['postMessage']>[0]> = [];
 
   const client: SlackWebClientLike = {
-    assistant: { threads: { setStatus: vi.fn().mockResolvedValue({}) } },
+    apiCall: vi.fn().mockResolvedValue({}),
     chat: {
       delete: vi.fn().mockResolvedValue({}),
       postMessage: vi.fn().mockImplementation(async (args) => {

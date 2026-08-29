@@ -67,8 +67,7 @@ describe('Slack skill user input bridge', () => {
     );
     expect(statusCalls.at(-1)).toEqual({
       channel_id: 'C123',
-      loading_messages: expect.arrayContaining(['is which calendar should I use?']),
-      status: 'is waiting for your reply...',
+      status: 'suspended',
       thread_ts: threadTs,
     });
 
@@ -95,7 +94,7 @@ describe('Slack skill user input bridge', () => {
     );
     expect(statusCalls.at(-1)).toEqual({
       channel_id: 'C123',
-      status: '',
+      status: 'active',
       thread_ts: threadTs,
     });
   });
@@ -230,7 +229,6 @@ function createSlackClientFixture({ threadTs }: { threadTs: string }): {
   postMessageCalls: Array<{ channel: string; text: string; thread_ts?: string }>;
   statusCalls: Array<{
     channel_id: string;
-    loading_messages?: string[];
     status: string;
     thread_ts: string;
   }>;
@@ -238,19 +236,16 @@ function createSlackClientFixture({ threadTs }: { threadTs: string }): {
   const postMessageCalls: Array<{ channel: string; text: string; thread_ts?: string }> = [];
   const statusCalls: Array<{
     channel_id: string;
-    loading_messages?: string[];
     status: string;
     thread_ts: string;
   }> = [];
 
   const client: SlackWebClientLike = {
-    assistant: {
-      threads: {
-        setStatus: async (args) => {
-          statusCalls.push(args);
-          return {};
-        },
-      },
+    apiCall: async (method, args) => {
+      if (method === 'agents.sessions.setStatus') {
+        statusCalls.push(args as (typeof statusCalls)[number]);
+      }
+      return {};
     },
     auth: {
       test: async () => ({ user_id: 'U_BOT' }),

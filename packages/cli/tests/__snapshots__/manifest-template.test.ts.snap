@@ -6,6 +6,23 @@ exports[`manifest-template > produces expected manifest structure 1`] = `
     "name": "Kagura",
   },
   "features": {
+    "agent_view": {
+      "agent_description": "Runs coding agents in your repos and reports back in the thread.",
+      "suggested_prompts": [
+        {
+          "message": "Please summarize the latest discussion in this thread.",
+          "title": "Summarize a thread",
+        },
+        {
+          "message": "Please review the recent code changes and call out risks.",
+          "title": "Review code changes",
+        },
+        {
+          "message": "Please create an implementation plan for this task.",
+          "title": "Draft a plan",
+        },
+      ],
+    },
     "app_home": {
       "home_tab_enabled": true,
       "messages_tab_enabled": true,
@@ -88,6 +105,7 @@ exports[`manifest-template > produces expected manifest structure 1`] = `
   "settings": {
     "event_subscriptions": {
       "bot_events": [
+        "agent_session_stopped",
         "app_home_opened",
         "message.channels",
         "message.groups",

@@ -465,6 +465,7 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
     threadTs,
     userId: message.user,
     userInputBridge: deps.userInputBridge,
+    ...(message.team ? { teamId: message.team } : {}),
     ...(workspace?.workspaceBranch ? { workspaceBranch: workspace.workspaceBranch } : {}),
     ...(workspace?.workspacePullRequestNumber
       ? { workspacePullRequestNumber: workspace.workspacePullRequestNumber }

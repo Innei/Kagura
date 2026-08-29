@@ -3,19 +3,6 @@ export interface SlackReactionsApi {
   remove: (args: { channel: string; timestamp: string; name: string }) => Promise<unknown>;
 }
 
-export interface SlackAssistantThreadsApi {
-  setStatus: (args: {
-    channel_id: string;
-    thread_ts: string;
-    status: string;
-    loading_messages?: string[];
-  }) => Promise<unknown>;
-}
-
-export interface SlackAssistantApi {
-  threads: SlackAssistantThreadsApi;
-}
-
 export interface SlackAuthApi {
   test: () => Promise<{
     bot_id?: string;
@@ -129,6 +116,7 @@ export interface SlackFilesApi {
 }
 
 export interface SlackChatApi {
+  appendStream?: (args: { channel: string; markdown_text: string; ts: string }) => Promise<unknown>;
   delete: (args: { channel: string; ts: string }) => Promise<unknown>;
   postEphemeral?: (args: {
     channel: string;
@@ -142,6 +130,19 @@ export interface SlackChatApi {
     text: string;
     thread_ts?: string;
   }) => Promise<{ ts?: string }>;
+  startStream?: (args: {
+    channel: string;
+    markdown_text?: string;
+    recipient_team_id?: string;
+    recipient_user_id?: string;
+    thread_ts: string;
+  }) => Promise<{ ts?: string }>;
+  stopStream?: (args: {
+    blocks?: SlackBlock[];
+    channel: string;
+    markdown_text?: string;
+    ts: string;
+  }) => Promise<unknown>;
   update: (args: {
     blocks?: SlackBlock[];
     channel: string;
@@ -156,7 +157,7 @@ export interface SlackViewsApi {
 }
 
 export interface SlackWebClientLike {
-  assistant: SlackAssistantApi;
+  apiCall: (method: string, args: Record<string, unknown>) => Promise<unknown>;
   auth?: SlackAuthApi;
   chat: SlackChatApi;
   conversations: SlackConversationsApi;

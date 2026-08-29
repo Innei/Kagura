@@ -186,6 +186,30 @@ describe('thread reply ingress', () => {
     expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledOnce();
   });
 
+  it('processes an unmentioned agent DM as if it were addressed to this app', async () => {
+    const threadTs = '1712345678.000137';
+    const { claudeExecutor, client, handler, renderer, threadContextLoader } =
+      createThreadReplyTestHarness(threadTs, { initialSessions: [] });
+
+    await handler({
+      client,
+      event: {
+        channel: 'D123',
+        channel_type: 'im',
+        team: 'T123',
+        text: 'continue with the deliverable',
+        ts: threadTs,
+        type: 'message',
+        user: 'U123',
+      },
+    });
+
+    expect(renderer.showThinkingIndicator).toHaveBeenCalledOnce();
+    expect(threadContextLoader.loadThread).toHaveBeenCalledOnce();
+    expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledOnce();
+    expect(renderer.addAcknowledgementReaction).not.toHaveBeenCalled();
+  });
+
   it('processes a root Slack user-group mention only for the configured lead', async () => {
     const threadTs = '1712345678.000115';
     const { claudeExecutor, client, handler, renderer, sessionStore, threadContextLoader } =
@@ -1056,11 +1080,7 @@ function createSlackClientFixture(): SlackWebClientLike & {
   };
 } {
   return {
-    assistant: {
-      threads: {
-        setStatus: vi.fn().mockResolvedValue({}),
-      },
-    },
+    apiCall: vi.fn().mockResolvedValue({}),
     auth: {
       test: vi.fn().mockResolvedValue({ user: 'kagura', user_id: 'U_BOT' }),
     },

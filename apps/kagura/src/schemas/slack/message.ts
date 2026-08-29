@@ -26,6 +26,7 @@ export const SlackFileSchema = z.looseObject({
 
 export const SlackMessageSchema = z.looseObject({
   channel: z.string().min(1).optional(),
+  channel_type: z.string().min(1).optional(),
   team: z.string().min(1).optional(),
   text: z.string().default(''),
   ts: z.string().min(1),

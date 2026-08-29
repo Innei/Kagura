@@ -36,6 +36,7 @@ import {
   clearToolStatus,
   clearTransientSystemStatuses,
   describeGenericToolActivity,
+  extractStreamTextDelta,
   rememberLoadingMessage,
   setSessionStatus,
   setSystemStatus,
@@ -79,6 +80,10 @@ export async function handleClaudeSdkMessage(
 
     case 'stream_event': {
       const stream = message as SDKPartialAssistantMessage;
+      const textDelta = extractStreamTextDelta(stream);
+      if (textDelta) {
+        await sink.onEvent({ type: 'assistant-message-delta', text: textDelta });
+      }
       if (applyStreamEventToUiState(handlers.runtimeUi, stream)) {
         await handlers.publishUiState();
       }

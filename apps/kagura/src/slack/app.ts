@@ -1,4 +1,4 @@
-import { App, Assistant } from '@slack/bolt';
+import { App } from '@slack/bolt';
 
 import type { AgentProviderRegistry } from '~/agent/registry.js';
 import type { SessionAnalyticsStore } from '~/analytics/types.js';
@@ -23,11 +23,8 @@ import type {
   A2AOutputMode,
   QuietAssistantMessageRecorder,
 } from './ingress/a2a-output-diagnostics.js';
+import { createAgentSessionStoppedHandler } from './ingress/agent-session-stopped-handler.js';
 import type { AgentTeamsConfig } from './ingress/agent-team-routing.js';
-import {
-  createAssistantThreadStartedHandler,
-  createAssistantUserMessageHandler,
-} from './ingress/assistant-message-handler.js';
 import {
   type ConversationDispatchInput,
   dispatchThreadConversation,
@@ -146,10 +143,6 @@ export function createSlackApp(
     userInputBridge: deps.userInputBridge,
     workspaceResolver: deps.workspaceResolver,
   };
-  const assistant = new Assistant({
-    threadStarted: createAssistantThreadStartedHandler(ingressDeps),
-    userMessage: createAssistantUserMessageHandler(ingressDeps),
-  });
   let stopA2ASummaryPoller: (() => void) | undefined;
 
   const homeTabHandler = createHomeTabHandler({
@@ -167,6 +160,14 @@ export function createSlackApp(
     await homeTabHandler({ client, event: { user: body.user.id, tab: 'home' } });
   });
   app.event('message', createThreadReplyHandler(ingressDeps));
+  // Bolt 4.7.1 predates agent_session_stopped, so its event-name union rejects it.
+  (app.event as (name: string, handler: unknown) => void)(
+    'agent_session_stopped',
+    createAgentSessionStoppedHandler({
+      logger: deps.logger.withTag('slack:agent-session-stop'),
+      threadExecutionRegistry: deps.threadExecutionRegistry,
+    }),
+  );
   app.event(
     'reaction_added',
     createReactionStopHandler({
@@ -206,7 +207,6 @@ export function createSlackApp(
   app.action('open_review_panel', async ({ ack }) => {
     await ack();
   });
-  app.assistant(assistant);
 
   app.error(async (error) => {
     deps.logger.error('Slack Bolt unhandled error: %s', redactUnknown(error));
