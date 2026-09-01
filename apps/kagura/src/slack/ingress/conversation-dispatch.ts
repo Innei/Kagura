@@ -1,4 +1,4 @@
-import { renameAgentSession, setAgentSessionStatus } from '../agent-sessions.js';
+import { setAgentSessionStatus } from '../agent-sessions.js';
 import type { SlackWebClientLike } from '../types.js';
 import { handleThreadConversation } from './conversation-pipeline.js';
 import { fallbackThreadTitle } from './thread-title-generator.js';
@@ -68,8 +68,8 @@ export async function dispatchThreadConversation(
   await handleThreadConversation(client, message, deps, options);
 }
 
-// The first turn names the Slack agent session so it is recognizable in the
-// sessions timeline and thread header.
+// The first turn creates and names the Slack agent session in one status call
+// so Slack does not need a separate rename on a session that may not exist yet.
 async function nameNewAgentSession(
   client: SlackWebClientLike,
   deps: SlackIngressDependencies,
@@ -99,21 +99,15 @@ async function nameNewAgentSession(
     return;
   }
 
-  await renameAgentSession(client, {
+  await setAgentSessionStatus(client, {
     channelId: input.channelId,
+    initiatorUserId: input.userId,
+    status: 'processing',
     threadTs,
     title,
   }).catch((error: unknown) => {
-    deps.logger.warn('Failed to name agent session for thread %s: %s', threadTs, String(error));
-  });
-
-  await setAgentSessionStatus(client, {
-    channelId: input.channelId,
-    status: 'processing',
-    threadTs,
-  }).catch((error: unknown) => {
     deps.logger.warn(
-      'Failed to set initial agent session status for thread %s: %s',
+      'Failed to create named agent session status for thread %s: %s',
       threadTs,
       String(error),
     );

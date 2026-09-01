@@ -15,7 +15,7 @@ export interface ReviewChangedFile {
 export interface ReviewTreeEntry {
   path: string;
   status?: string | undefined;
-  type: 'file';
+  type: 'dir' | 'file';
 }
 
 export interface ReviewSessionDetails extends Omit<
@@ -53,7 +53,12 @@ export class GitReviewService {
     const session = this.store.get(executionId);
     if (!session) return undefined;
 
-    const statusByPath = new Map(getChangedFiles(session).map((file) => [file.path, file.status]));
+    const statusByPath = new Map(
+      (readChangedFilesSnapshot(session) ?? getChangedFiles(session)).map((file) => [
+        file.path,
+        file.status,
+      ]),
+    );
     const files = runGit(session.workspacePath, ['ls-files']).split('\n').filter(Boolean);
     for (const file of statusByPath.keys()) {
       if (!files.includes(file)) {
@@ -61,13 +66,7 @@ export class GitReviewService {
       }
     }
 
-    return files
-      .sort((left, right) => left.localeCompare(right))
-      .map((file) => ({
-        path: file,
-        type: 'file' as const,
-        ...(statusByPath.get(file) ? { status: statusByPath.get(file) } : {}),
-      }));
+    return buildReviewTreeEntries(files, statusByPath);
   }
 
   getDiff(executionId: string, filePath?: string | undefined): string | undefined {
@@ -173,6 +172,28 @@ export class GitReviewService {
     }
     return formatFilePayload(relativePath, content);
   }
+}
+
+function buildReviewTreeEntries(
+  files: string[],
+  statusByPath: Map<string, string>,
+): ReviewTreeEntry[] {
+  const entries = new Map<string, ReviewTreeEntry>();
+
+  for (const file of files) {
+    const segments = file.split('/').filter(Boolean);
+    for (let index = 1; index < segments.length; index++) {
+      const dirPath = segments.slice(0, index).join('/');
+      entries.set(dirPath, { path: dirPath, type: 'dir' });
+    }
+    entries.set(file, {
+      path: file,
+      type: 'file',
+      ...(statusByPath.get(file) ? { status: statusByPath.get(file) } : {}),
+    });
+  }
+
+  return [...entries.values()].sort((left, right) => left.path.localeCompare(right.path));
 }
 
 export function createReviewSessionSnapshot(session: ReviewSessionRecord): ReviewSessionSnapshot {

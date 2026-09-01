@@ -435,6 +435,31 @@ describe('SlackRenderer.postThreadReply', () => {
       '_Working in repo/worktree (branch: feature/slack-branch-pill)_',
     ]);
   });
+
+  it('includes cwd in the workspace context when available', async () => {
+    const { client, imagePostCalls } = createClientFixture();
+    const renderer = new SlackRenderer(createTestLogger());
+
+    await renderer.postThreadReply(client, 'C1', 'ts-root', 'Hello from Slack.', {
+      workspaceBranch: 'feature/slack-branch-pill',
+      workspaceLabel: 'repo/worktree',
+      workspacePath: '/tmp/repo/worktree',
+    });
+
+    const contextTexts = (imagePostCalls[0]!.blocks as SlackBlock[] | undefined)
+      ?.filter((block) => block.type === 'context')
+      .flatMap((block) =>
+        (block.elements ?? [])
+          .map((element) =>
+            'text' in element && typeof element.text === 'string' ? element.text : '',
+          )
+          .filter(Boolean),
+      );
+
+    expect(contextTexts).toEqual([
+      '_Working in repo/worktree (branch: feature/slack-branch-pill; cwd: `/tmp/repo/worktree`)_',
+    ]);
+  });
 });
 
 describe('SlackRenderer.upsertThreadProgressMessage', () => {
@@ -643,6 +668,7 @@ describe('SlackRenderer.updateThreadReplyWorkspaceContext', () => {
       {
         workspaceBranch: 'new-branch',
         workspaceLabel: 'repo/worktree',
+        workspacePath: '/tmp/repo/worktree',
       },
     );
 
@@ -650,7 +676,12 @@ describe('SlackRenderer.updateThreadReplyWorkspaceContext', () => {
       blocks: [
         {
           type: 'context',
-          elements: [{ type: 'mrkdwn', text: '_Working in repo/worktree (branch: new-branch)_' }],
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: '_Working in repo/worktree (branch: new-branch; cwd: `/tmp/repo/worktree`)_',
+            },
+          ],
         },
         {
           type: 'section',
@@ -663,7 +694,12 @@ describe('SlackRenderer.updateThreadReplyWorkspaceContext', () => {
     });
     expect(updated.blocks?.[0]).toMatchObject({
       type: 'context',
-      elements: [{ type: 'mrkdwn', text: '_Working in repo/worktree (branch: new-branch)_' }],
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: '_Working in repo/worktree (branch: new-branch; cwd: `/tmp/repo/worktree`)_',
+        },
+      ],
     });
   });
 });

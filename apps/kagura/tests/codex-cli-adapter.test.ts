@@ -314,6 +314,55 @@ describe('CodexCliExecutor', () => {
     });
   });
 
+  it('emits workspace context when Codex final text links to a worktree file line', async () => {
+    const { repoPath, worktreePath } = createGitWorktreeFixture();
+    const linkedFile = path.join(worktreePath, 'src', 'index.ts');
+    mkdirSync(path.dirname(linkedFile), { recursive: true });
+    writeFileSync(linkedFile, 'export const value = 1;\n');
+    const request = createRequest({
+      workspaceLabel: 'slack-cc-bot',
+      workspacePath: repoPath,
+      workspaceRepoId: 'innei-repo/slack-cc-bot',
+    });
+
+    spawnMock.mockImplementation(
+      () =>
+        new FakeCodexProcess((_prompt, child) => {
+          queueMicrotask(() => {
+            writeJson(child, { type: 'thread.started', thread_id: 'codex-thread-1' });
+            writeJson(child, {
+              type: 'item.completed',
+              item: {
+                id: 'msg-1',
+                type: 'agent_message',
+                text: `Changed [index.ts](${linkedFile}:7)`,
+              },
+            });
+            child.stdout.end();
+            child.stderr.end();
+            child.emit('exit', 0, null);
+          });
+        }),
+    );
+
+    const events: AgentExecutionEvent[] = [];
+    await new CodexCliExecutor(createLogger()).execute(request, createSink(events));
+
+    const resolvedWorktreePath = execFileSync(
+      'git',
+      ['-C', worktreePath, 'rev-parse', '--show-toplevel'],
+      {
+        encoding: 'utf8',
+      },
+    ).trim();
+    expect(events).toContainEqual({
+      type: 'workspace-context',
+      workspaceLabel: path.basename(worktreePath),
+      workspacePath: resolvedWorktreePath,
+      workspaceRepoId: 'innei-repo/slack-cc-bot',
+    });
+  });
+
   it('uses codex exec resume when a resume handle exists', async () => {
     spawnMock.mockImplementation(
       () =>

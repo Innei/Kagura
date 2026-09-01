@@ -6,6 +6,7 @@ export type AgentSessionStatus = 'processing' | 'active' | 'suspended' | 'closed
 
 export interface AgentSessionStatusArgs {
   channelId: string;
+  initiatorUserId?: string | undefined;
   status: AgentSessionStatus;
   threadTs: string;
   title?: string | undefined;
@@ -19,8 +20,10 @@ export async function setAgentSessionStatus(
 ): Promise<void> {
   await client.apiCall('agents.sessions.setStatus', {
     channel_id: args.channelId,
+    ...(args.initiatorUserId ? { initiator_user_id: args.initiatorUserId } : {}),
     thread_ts: args.threadTs,
     status: args.status,
+    ...(args.title ? { title: args.title.slice(0, TITLE_MAX_LENGTH) } : {}),
   });
 }
 

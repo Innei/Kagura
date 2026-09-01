@@ -53,6 +53,10 @@ describe('GitReviewService', () => {
       status: '??',
       type: 'file',
     });
+    expect(service.listTree('exec-1')).toContainEqual({
+      path: 'src',
+      type: 'dir',
+    });
 
     const fullDiff = service.getDiff('exec-1') ?? '';
     expect(fullDiff).toContain('diff --git a/src/index.ts b/src/index.ts');
@@ -103,6 +107,18 @@ describe('GitReviewService', () => {
     ]);
     expect(session).not.toHaveProperty('changedFilesSnapshot');
     expect(session).not.toHaveProperty('diffSnapshot');
+    expect(service.listTree('exec-snapshot')).toEqual(
+      expect.arrayContaining([
+        { path: 'src', type: 'dir' },
+        { path: 'src/index.ts', status: 'M', type: 'file' },
+        { path: 'src/new.ts', status: '??', type: 'file' },
+      ]),
+    );
+    expect(service.listTree('exec-snapshot')).not.toContainEqual({
+      path: 'src/later.ts',
+      status: '??',
+      type: 'file',
+    });
 
     const fullDiff = service.getDiff('exec-snapshot') ?? '';
     expect(fullDiff).toContain('export const value = 2;');

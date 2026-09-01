@@ -67,6 +67,7 @@ interface ThreadReplyContextOptions {
   toolHistory?: Map<string, number>;
   workspaceBranch?: string;
   workspaceLabel?: string;
+  workspacePath?: string;
   workspacePullRequestNumber?: number;
   workspacePullRequestUrl?: string;
 }
@@ -1020,6 +1021,7 @@ function buildThreadReplyContextBlocks(options?: ThreadReplyContextOptions): Arr
   const workspaceContext = formatWorkspaceContext(
     options?.workspaceLabel,
     options?.workspaceBranch,
+    options?.workspacePath,
   );
   if (workspaceContext) {
     prefixBlocks.push({
@@ -1064,16 +1066,20 @@ function replaceWorkspaceContextBlocks(
 function formatWorkspaceContext(
   workspaceLabel?: string,
   workspaceBranch?: string,
+  workspacePath?: string,
 ): string | undefined {
   if (!workspaceLabel) {
     return undefined;
   }
 
-  if (!workspaceBranch) {
-    return `_Working in ${workspaceLabel}_`;
-  }
+  const details = [
+    workspaceBranch ? `branch: ${workspaceBranch}` : undefined,
+    workspacePath ? `cwd: \`${workspacePath}\`` : undefined,
+  ].filter(Boolean);
 
-  return `_Working in ${workspaceLabel} (branch: ${workspaceBranch})_`;
+  return details.length > 0
+    ? `_Working in ${workspaceLabel} (${details.join('; ')})_`
+    : `_Working in ${workspaceLabel}_`;
 }
 
 function formatWorkspacePullRequestContext(

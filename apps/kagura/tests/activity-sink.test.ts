@@ -1284,6 +1284,7 @@ describe('createActivitySink', () => {
       {
         workspaceBranch: 'feature/renamed-work',
         workspaceLabel: 'my-workspace',
+        workspacePath: '/tmp/my-workspace',
       },
     );
 
@@ -1344,6 +1345,7 @@ describe('createActivitySink', () => {
       {
         workspaceBranch: 'feature/worktree',
         workspaceLabel: 'repo-worktree',
+        workspacePath: '/repo/worktree',
       },
     );
 
@@ -1422,6 +1424,35 @@ describe('createActivitySink', () => {
     } finally {
       git(sourcePath, ['worktree', 'remove', '--force', worktreePath]);
     }
+  });
+
+  it('posts review panel link when a failed run leaves workspace changes', async () => {
+    const sourcePath = createGitFixture();
+    const renderer = createRendererStub();
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      initialGitHead: gitOutput(sourcePath, ['rev-parse', 'HEAD']),
+      initialGitStatus: '',
+      logger: createTestLogger(),
+      renderer,
+      reviewUrl: 'https://kagura.example/reviews/exec-1',
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+      workspaceLabel: 'repo',
+      workspacePath: sourcePath,
+    });
+
+    fs.writeFileSync(path.join(sourcePath, 'src/index.ts'), 'export const value = 2;\n');
+    await sink.onEvent({ type: 'lifecycle', phase: 'failed', error: 'boom' });
+    await sink.finalize();
+
+    expect(renderer.postReviewPanelLink).toHaveBeenCalledWith(
+      expect.anything(),
+      'C123',
+      'ts1',
+      'https://kagura.example/reviews/exec-1',
+    );
   });
 
   it('forwards permission requests to the Slack permission bridge', async () => {

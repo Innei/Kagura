@@ -17,7 +17,7 @@ describe('dispatchThreadConversation', () => {
     handleThreadConversationMock.mockClear();
   });
 
-  it('renames a new Slack agent session with the generated short title', async () => {
+  it('creates a named Slack agent session with the generated short title', async () => {
     const apiCall = vi.fn().mockResolvedValue({});
     const deps = createDeps({
       threadTitleGenerator: {
@@ -27,15 +27,13 @@ describe('dispatchThreadConversation', () => {
 
     await dispatchThreadConversation(createClient(apiCall), deps, createInput());
 
-    expect(apiCall).toHaveBeenNthCalledWith(1, 'agents.sessions.rename', {
+    expect(apiCall).toHaveBeenCalledTimes(1);
+    expect(apiCall).toHaveBeenCalledWith('agents.sessions.setStatus', {
       channel_id: 'C123',
-      thread_ts: '1712345678.000100',
-      title: '接入 Thread Title',
-    });
-    expect(apiCall).toHaveBeenNthCalledWith(2, 'agents.sessions.setStatus', {
-      channel_id: 'C123',
+      initiator_user_id: 'U123',
       thread_ts: '1712345678.000100',
       status: 'processing',
+      title: '接入 Thread Title',
     });
     expect(handleThreadConversationMock).toHaveBeenCalledOnce();
   });
@@ -54,9 +52,11 @@ describe('dispatchThreadConversation', () => {
       createInput({ text: '<@U_BOT> 修复 Slack thread title 命名' }),
     );
 
-    expect(apiCall).toHaveBeenCalledWith('agents.sessions.rename', {
+    expect(apiCall).toHaveBeenCalledWith('agents.sessions.setStatus', {
       channel_id: 'C123',
+      initiator_user_id: 'U123',
       thread_ts: '1712345678.000100',
+      status: 'processing',
       title: '修复 Slack thread title 命名',
     });
     expect(deps.logger.warn).toHaveBeenCalledWith(

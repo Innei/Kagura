@@ -205,6 +205,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     const updatedReply = await safeRender('update assistant workspace context', () =>
       renderer.updateThreadReplyWorkspaceContext(client, channel, threadTs, replyToUpdate, {
         ...(currentWorkspaceBranch ? { workspaceBranch: currentWorkspaceBranch } : {}),
+        ...(currentWorkspacePath ? { workspacePath: currentWorkspacePath } : {}),
         workspaceLabel,
       }),
     );
@@ -376,6 +377,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
         ? { workspaceBranch: currentWorkspaceBranch }
         : {}),
       ...(includeToolbar && currentWorkspaceLabel ? { workspaceLabel: currentWorkspaceLabel } : {}),
+      ...(includeToolbar && currentWorkspacePath ? { workspacePath: currentWorkspacePath } : {}),
       ...(includeToolbar && currentWorkspacePullRequestNumber
         ? { workspacePullRequestNumber: currentWorkspacePullRequestNumber }
         : {}),
@@ -412,6 +414,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
         ...(includeToolbar && currentWorkspaceLabel
           ? { workspaceLabel: currentWorkspaceLabel }
           : {}),
+        ...(includeToolbar && currentWorkspacePath ? { workspacePath: currentWorkspacePath } : {}),
         ...(includeToolbar && currentWorkspacePullRequestNumber
           ? { workspacePullRequestNumber: currentWorkspacePullRequestNumber }
           : {}),
@@ -619,6 +622,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     const updatedReply = await safeRender('update assistant workspace context', () =>
       renderer.updateThreadReplyWorkspaceContext(client, channel, threadTs, toolbarReply!, {
         ...(currentWorkspaceBranch ? { workspaceBranch: currentWorkspaceBranch } : {}),
+        ...(currentWorkspacePath ? { workspacePath: currentWorkspacePath } : {}),
         workspaceLabel: currentWorkspaceLabel!,
       }),
     );
@@ -934,7 +938,11 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
           logger.warn('Failed to persist session analytics: %s', String(err));
         }
       }
-      if (executionCompletedSuccessfully && reviewUrl && hasWorkspaceChanges()) {
+      if (
+        (executionCompletedSuccessfully || terminalPhase === 'failed') &&
+        reviewUrl &&
+        hasWorkspaceChanges()
+      ) {
         await renderer.postReviewPanelLink(client, channel, threadTs, reviewUrl).catch((err) => {
           logger.warn('Failed to post review panel link: %s', String(err));
         });

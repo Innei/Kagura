@@ -67,12 +67,16 @@ function extractAbsolutePaths(text: string): string[] {
   const paths = new Set<string>();
   const matches = text.matchAll(/\/[^\s"'),;<>`|]+/g);
   for (const match of matches) {
-    const value = match[0]?.replaceAll(/[,.:\]]+$/g, '');
+    const value = normalizeExtractedAbsolutePath(match[0]);
     if (value) {
       paths.add(value);
     }
   }
   return [...paths];
+}
+
+function normalizeExtractedAbsolutePath(value: string | undefined): string | undefined {
+  return value?.replaceAll(/[,.:\]]+$/g, '').replace(/:(\d+)(?::\d+)?$/, '');
 }
 
 function resolveGitTopLevel(candidatePath: string): string | undefined {
