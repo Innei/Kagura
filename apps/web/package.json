@@ -23,7 +23,7 @@
     "react-dom": "^19.2.8",
     "react-resizable-panels": "^4.12.3",
     "shiki": "^4.4.3",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vite": "8.2.2",
     "wouter": "^3.10.0"
   },
