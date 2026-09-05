@@ -61,7 +61,7 @@
     "@t3-oss/env-core": "0.13.11",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "25.9.1",
-    "commander": "^14.0.3",
+    "commander": "^15.0.0",
     "dotenv": "17.4.2",
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
