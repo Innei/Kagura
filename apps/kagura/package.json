@@ -51,10 +51,10 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.145",
-    "better-sqlite3": "^12.10.0"
+    "better-sqlite3": "^12.11.1"
   },
   "devDependencies": {
-    "@clack/prompts": "^1.4.0",
+    "@clack/prompts": "^1.7.0",
     "@innei/pretty-logger-core": "0.4.2",
     "@kagura/cli": "workspace:*",
     "@slack/bolt": "4.7.2",
@@ -65,15 +65,15 @@
     "dotenv": "17.4.2",
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
-    "markdown-to-slack-blocks": "1.5.0",
+    "markdown-to-slack-blocks": "1.6.1",
     "nodemon": "3.1.14",
     "open": "^11.0.0",
     "picocolors": "^1.1.1",
     "tsdown": "0.22.0",
-    "tsx": "4.22.3",
+    "tsx": "4.23.13",
     "typescript": "^6.0.3",
     "vitest": "4.1.6",
-    "zod": "4.4.3"
+    "zod": "4.5.4"
   },
   "engines": {
     "node": ">=24.0.0"
