@@ -17,8 +17,8 @@
     "picocolors": "^1.1.1"
   },
   "devDependencies": {
-    "@types/node": "25.9.1",
-    "tsdown": "0.22.0",
+    "@types/node": "25.9.5",
+    "tsdown": "0.22.14",
     "typescript": "^6.0.3"
   }
 }
