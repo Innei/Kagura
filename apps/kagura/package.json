@@ -72,7 +72,7 @@
     "tsdown": "0.22.0",
     "tsx": "4.22.3",
     "typescript": "^6.0.3",
-    "vitest": "4.1.6",
+    "vitest": "4.1.11",
     "zod": "4.4.3"
   },
   "engines": {
