@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 Project conventions and guidelines for AI-assisted development on **kagura**.
 
