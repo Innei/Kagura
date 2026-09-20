@@ -3,9 +3,9 @@ packages:
   - packages/*
 overrides:
   '@esbuild-kit/core-utils>esbuild': 0.25.12
-  '@anthropic-ai/sdk': 0.91.1
+  '@anthropic-ai/sdk': 0.126.0
   brace-expansion: 5.0.6
-  vite: 8.2.2
+  vite: 8.3.0
 allowBuilds:
   esbuild: true
   simple-git-hooks: true
