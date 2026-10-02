@@ -57,7 +57,7 @@
     "@clack/prompts": "^1.4.0",
     "@innei/pretty-logger-core": "0.4.2",
     "@kagura/cli": "workspace:*",
-    "@slack/bolt": "4.7.2",
+    "@slack/bolt": "5.1.0",
     "@t3-oss/env-core": "0.13.11",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "25.9.1",
