@@ -48,16 +48,16 @@
   "devDependencies": {
     "@lobehub/eslint-config": "^2.1.5",
     "@lobehub/prettier-config": "^2.1.5",
-    "eslint": "^10.4.0",
-    "lint-staged": "^17.0.5",
-    "prettier": "^3.8.3",
+    "eslint": "^10.12.0",
+    "lint-staged": "^17.6.0",
+    "prettier": "^3.9.9",
     "prettier-plugin-packagejson": "^3.0.2",
-    "prettier-plugin-sh": "^0.18.1",
+    "prettier-plugin-sh": "^0.20.2",
     "prettier-plugin-sort-json": "^4.2.0",
-    "simple-git-hooks": "^2.13.1",
+    "simple-git-hooks": "^2.14.0",
     "typescript": "^6.0.3"
   },
-  "packageManager": "pnpm@11.0.0",
+  "packageManager": "pnpm@11.28.5",
   "engines": {
     "node": ">=24.0.0"
   }
